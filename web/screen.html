@@ -115,6 +115,52 @@
       .flash .big { font-family: 'Anton', sans-serif; font-size: 120px; font-weight: 800; }
       .flash .sub { font-size: 30px; margin-top: 12px; }
       .flash .hash { font-size: 17px; opacity: .6; margin-top: 18px; word-break: break-all; }
+
+      /* the final podium - design: frontend/projo/classement.html. Above the game, under the flash
+         (z 20) so the last manche's OVER/UNDER still lands first, under the lobby (z 30). */
+      .final {
+        position: fixed; inset: 0; z-index: 15; display: none; flex-direction: column; overflow: hidden;
+        background: radial-gradient(90% 70% at 50% -20%, #2B0F52 0%, #0B0710 60%) fixed, #0B0710;
+        --gold: #FFD166; --violet: #B34DFF; --msoft: #FF8FD4; --surface: #17101D; --surface2: #20142A; --border: #2C1E34;
+      }
+      .final.on { display: flex; }
+      .final .dots {
+        position: absolute; inset: 0; opacity: .18; animation: finalDots 14s linear infinite;
+        background-image: radial-gradient(rgba(255,46,158,.35) 2px, transparent 2.5px), radial-gradient(rgba(255,46,158,.18) 2px, transparent 2.5px);
+        background-size: 80px 80px, 120px 120px;
+      }
+      @keyframes finalDots { to { background-position: 160px 160px, 200px 200px; } }
+      @keyframes crownGlow { 0%, 100% { filter: drop-shadow(0 0 10px rgba(255,209,102,.7)); } 50% { filter: drop-shadow(0 0 20px rgba(255,209,102,1)); } }
+      @keyframes podiumGlow { 0%, 100% { box-shadow: 0 0 40px rgba(255,46,158,.55); } 50% { box-shadow: 0 0 70px rgba(255,46,158,.85); } }
+      .final .head { position: relative; text-align: center; padding: 5vh 0 0; display: flex; flex-direction: column; gap: .8vh; }
+      .final .kicker { font-size: 1.9vh; letter-spacing: 4px; opacity: .65; text-transform: uppercase; }
+      .final .title { font-family: 'Anton', sans-serif; font-size: 4.6vh; letter-spacing: 3px; color: var(--magenta); }
+      .final .body { position: relative; flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 4vh; padding: 1vh 4vw 4vh; }
+      .podium { display: flex; align-items: flex-end; justify-content: center; gap: 3vw; }
+      .pcol { display: flex; flex-direction: column; align-items: center; gap: 1.1vh; width: 15vw; }
+      .pcol .ring { position: relative; border-radius: 50%; background: var(--surface); }
+      .pcol .face { width: 100%; height: 100%; border-radius: 50%; overflow: hidden; }
+      .pcol.r1 .ring { width: 13vh; height: 13vh; border: 5px solid var(--gold); }
+      .pcol.r2 .ring { width: 10vh; height: 10vh; border: 4px solid var(--msoft); }
+      .pcol.r3 .ring { width: 9vh; height: 9vh; border: 4px solid var(--violet); }
+      .pcol .crown { position: absolute; top: -3.8vh; left: 50%; transform: translateX(-50%); z-index: 1; animation: crownGlow 1.8s ease-in-out infinite; }
+      .pcol .nm { font-size: 2.4vh; font-weight: 700; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .pcol .sc { font-family: 'Anton', sans-serif; font-size: 2.6vh; color: var(--msoft); }
+      .pcol .block { width: 100%; border-radius: 16px 16px 0 0; display: flex; justify-content: center; padding-top: 1.6vh; border: 2px solid var(--border); background: var(--surface2); }
+      .pcol .rk { font-family: 'Anton', sans-serif; font-size: 5vh; }
+      .pcol.r1 .block { height: 25vh; background: linear-gradient(180deg, #3A1030 0%, #24081F 100%); border-color: var(--magenta); animation: podiumGlow 2.2s ease-in-out infinite; }
+      .pcol.r1 .rk, .pcol.r1 .sc { color: var(--gold); }
+      .pcol.r1 .sc { font-size: 3.1vh; }
+      .pcol.r2 .block { height: 17vh; }
+      .pcol.r2 .rk { color: var(--msoft); }
+      .pcol.r3 .block { height: 12vh; }
+      .pcol.r3 .rk { color: var(--violet); }
+      .rest { display: grid; grid-template-columns: 1fr 1fr; gap: 1vh 1.6vw; width: min(70vw, 1100px); margin: 0 auto; }
+      .rrow { display: flex; align-items: center; gap: 1vw; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1vh 1.2vw; }
+      .rrow .rk { font-family: 'Anton', sans-serif; font-size: 2vh; opacity: .5; width: 2.2vw; }
+      .rrow .face { width: 4.2vh; height: 4.2vh; flex: none; }
+      .rrow .nm { flex: 1; font-size: 2vh; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .rrow .sc { font-family: 'Anton', sans-serif; font-size: 2vh; opacity: .75; }
     </style>
   </head>
   <body>
@@ -179,6 +225,18 @@
       </div>
       <div class="lobbyBot">
         <div class="lobbyNote" id="startNote">Two rounds · 1000 AURA each · Winners are paid in MON</div>
+      </div>
+    </div>
+
+    <div class="final" id="final">
+      <div class="dots"></div>
+      <div class="head">
+        <span class="kicker">End of the game</span>
+        <span class="title">AURA MAX LEADERBOARD</span>
+      </div>
+      <div class="body">
+        <div class="podium" id="podium"></div>
+        <div class="rest" id="rest"></div>
       </div>
     </div>
 
