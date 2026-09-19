@@ -64,7 +64,8 @@ function setQuestion(): void {
 // --- join screen -------------------------------------------------------------------------
 
 const avatarGrid = $('avatars')
-avatarGrid.style.setProperty('--cols', String(AVATAR_COUNT))
+// two rows once there are more than four: six faces in one row would be thumbnails on a phone
+avatarGrid.style.setProperty('--cols', String(AVATAR_COUNT <= 4 ? AVATAR_COUNT : Math.ceil(AVATAR_COUNT / 2)))
 for (let index = 0; index < AVATAR_COUNT; index++) {
   const cell = document.createElement('button')
   cell.type = 'button'

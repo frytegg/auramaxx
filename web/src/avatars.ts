@@ -3,13 +3,12 @@
  * web/scripts/make_avatars.py from the (gitignored) /avatar folder into /avatars/<index>.webp.
  *
  * The index is what travels over the wire and what the contract stores, so the ORDER is the data:
- * new avatars go at the end, never reorder. The game has five slots and three pictures so far; any
- * index without a picture (including the old emoji indices, 0-11, already on chain) wraps onto one
- * that exists, so no player is ever shown without a face.
+ * new avatars go at the end, never reorder. There are six; any index without a picture (including
+ * the old emoji indices, 0-11, already on chain) wraps onto one that exists, so no player is ever
+ * shown without a face. The server clamps joins to the same count (AVATAR_SLOTS in game.ts).
  */
-export const AVATAR_SLOTS = 5
-/** Pictures that exist in web/public/avatars. Raise it when make_avatars.py writes a new one. */
-export const AVATAR_COUNT = 3
+/** Pictures in web/public/avatars. Keep it in step with make_avatars.py and the server's AVATAR_SLOTS. */
+export const AVATAR_COUNT = 6
 
 export function avatarIndex(index: number): number {
   const n = Math.floor(Number(index))

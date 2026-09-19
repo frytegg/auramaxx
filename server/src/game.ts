@@ -132,8 +132,8 @@ export function resetGame(): { gameId: number } {
 
 // --- joining ---------------------------------------------------------------------------
 
-/** The game has five picture avatars (web/src/avatars.ts); the contract stores the index as a uint8. */
-const AVATAR_SLOTS = 5
+/** The game has six picture avatars (AVATAR_COUNT in web/src/avatars.ts); the contract stores the index as a uint8. */
+const AVATAR_SLOTS = 6
 
 export function join(address: Address, name: string, avatar: number): Player {
   const clean = name.trim().slice(0, 12) || 'anon'
