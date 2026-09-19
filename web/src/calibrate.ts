@@ -51,29 +51,47 @@ async function startCamera(index = 0): Promise<void> {
       'only works over https or on localhost. Nothing else is wrong.'
     return
   }
-  try {
-    stream?.getTracks().forEach((t) => t.stop())
-    devices = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'videoinput')
-    deviceIndex = devices.length === 0 ? 0 : ((index % devices.length) + devices.length) % devices.length
-    const deviceId = devices[deviceIndex]?.deviceId
-    // `ideal`, never `exact`, on width/height/frameRate: `exact` throws OverconstrainedError
-    // with no prompt and no picture, which looks exactly like a broken camera on stage.
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
-        width: { ideal: 1920 },
-        height: { ideal: 1080 },
-        frameRate: { ideal: 30 },
-      },
-      audio: false,
-    })
-    video.srcObject = stream
-    videoDead = false
-    await video.play()
-    el.device.textContent = `${devices[deviceIndex]?.label || 'camera ' + deviceIndex} (${devices.length} found)`
-  } catch (error: unknown) {
-    el.device.textContent = `camera error: ${String(error).slice(0, 80)}`
+
+  // release whatever we hold before asking again: a video device is exclusive on Windows, and
+  // a second page (or the Camera app) holding it gives NotReadableError with a black frame.
+  stream?.getTracks().forEach((t) => t.stop())
+  stream = null
+  video.srcObject = null
+
+  devices = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'videoinput')
+  deviceIndex = devices.length === 0 ? 0 : ((index % devices.length) + devices.length) % devices.length
+  const deviceId = devices[deviceIndex]?.deviceId
+
+  // `ideal`, never `exact`, on width/height/frameRate: `exact` throws OverconstrainedError with
+  // no prompt and no picture, which looks exactly like a broken camera on stage.
+  const attempts: MediaStreamConstraints[] = [
+    { video: { ...(deviceId ? { deviceId: { exact: deviceId } } : {}), width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } }, audio: false },
+    { video: { ...(deviceId ? { deviceId: { exact: deviceId } } : {}) }, audio: false },
+    { video: true, audio: false },
+  ]
+
+  for (const [i, constraints] of attempts.entries()) {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia(constraints)
+      video.srcObject = stream
+      videoDead = false
+      await video.play()
+      const track = stream.getVideoTracks()[0]
+      const settings = track?.getSettings()
+      el.device.textContent = `${track?.label || devices[deviceIndex]?.label || 'camera'} · ${settings?.width ?? '?'}x${settings?.height ?? '?'} (${devices.length} found${i > 0 ? ', fallback' : ''})`
+      return
+    } catch (error: unknown) {
+      const name = error instanceof Error ? error.name : String(error)
+      el.device.textContent = `camera ${name} — retrying…`
+      if (name === 'NotReadableError') {
+        el.hint.textContent =
+          'NotReadableError: another page or app is holding the camera. Close the other calibrate ' +
+          'tab, the Windows Camera app, Teams or OBS, then press C.'
+      }
+      await new Promise((r) => setTimeout(r, 350))
+    }
   }
+  el.device.textContent = 'no camera — press C to retry'
 }
 
 // --- the loop ---------------------------------------------------------------------------
