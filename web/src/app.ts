@@ -232,8 +232,13 @@ function connect(): void {
   socket = new WebSocket(url)
 
   socket.addEventListener('open', () => {
+    // Re-register after a dropped socket, so a phone that lost the network mid-round can still
+    // bet. NOT while the join screen is still up: firing the saved name before the player has
+    // chosen one puts last game's pseudonym on the projector before they have touched anything.
     const name = localStorage.getItem(STORAGE_NAME)
-    if (name) send({ type: 'join', address: account.address, name, avatar })
+    if (name && !$('vJoin').classList.contains('on')) {
+      send({ type: 'join', address: account.address, name, avatar })
+    }
   })
 
   socket.addEventListener('message', (event) => {

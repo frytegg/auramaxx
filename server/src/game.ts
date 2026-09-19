@@ -38,6 +38,8 @@ export type Player = {
   avatar: number
   onChain: boolean
   profit: number
+  /** The game they last joined. The lobby wall shows this game's room, not everyone ever seen. */
+  game: number
 }
 
 type RoundState = {
@@ -70,7 +72,14 @@ type RoundState = {
 export const players = new Map<Address, Player>()
 let round: RoundState | null = null
 let manche = 0
-/** 0 means no game has been started yet: the projector shows its landing page until this moves. */
+/**
+ * 0 means no game is open and the projector shows its landing page.
+ *
+ * `gameSeq` only ever counts up, and `gameId` takes its value. Deriving the id from a counter that
+ * goes back to 0 on a reset would hand the next game the id the last one had — and since players
+ * are stamped with the game they joined, the whole previous room would silently still be in it.
+ */
+let gameSeq = 0
 let gameId = 0
 let joinQueue: Player[] = []
 const listeners = new Set<(event: unknown) => void>()
@@ -96,10 +105,11 @@ function emit(event: Record<string, unknown>): void {
 export function newGame(): { gameId: number; players: number } {
   round = null
   manche = 0
-  gameId += 1
-  emit({ type: 'game', gameId, players: players.size })
-  log.info({ gameId, players: players.size }, 'new game')
-  return { gameId, players: players.size }
+  gameSeq += 1
+  gameId = gameSeq
+  emit({ type: 'game', gameId, players: 0 })
+  log.info({ gameId }, 'new game')
+  return { gameId, players: 0 }
 }
 
 /**
@@ -115,7 +125,7 @@ export function resetGame(): { gameId: number } {
   round = null
   manche = 0
   gameId = 0
-  emit({ type: 'game', gameId, players: players.size })
+  emit({ type: 'game', gameId, players: 0 })
   log.info('reset to the landing page')
   return { gameId }
 }
@@ -123,13 +133,29 @@ export function resetGame(): { gameId: number } {
 // --- joining ---------------------------------------------------------------------------
 
 export function join(address: Address, name: string, avatar: number): Player {
-  const existing = players.get(address)
-  if (existing) return existing
   const clean = name.trim().slice(0, 12) || 'anon'
-  const player: Player = { address, name: clean, avatar: avatar % 12, onChain: false, profit: 0 }
+  const chosen = avatar % 12
+  const existing = players.get(address)
+
+  if (existing) {
+    // A returning address used to be ignored outright, so anyone playing a second game was stuck
+    // with their first pseudonym for good. Renaming is allowed; the contract keeps whatever name
+    // it was given at joinBatch, so this only changes what the room sees — which is the part
+    // people actually look at.
+    const returning = existing.game !== gameId
+    existing.game = gameId
+    if (returning || existing.name !== clean || existing.avatar !== chosen) {
+      existing.name = clean
+      existing.avatar = chosen
+      emit({ type: 'joined', address, name: clean, avatar: chosen, total: roster().length })
+    }
+    return existing
+  }
+
+  const player: Player = { address, name: clean, avatar: chosen, onChain: false, profit: 0, game: gameId }
   players.set(address, player)
   joinQueue.push(player)
-  emit({ type: 'joined', name: clean, avatar: player.avatar, total: players.size })
+  emit({ type: 'joined', address, name: clean, avatar: chosen, total: roster().length })
   return player
 }
 
@@ -398,8 +424,10 @@ export async function payout(): Promise<{ hash: Hex; total: number; winners: num
  * leaderboard, which is sorted by profit and capped at 20: here the whole room has to appear, and
  * seeing your own name land is the point.
  */
-export function roster(): Array<{ name: string; avatar: number }> {
-  return [...players.values()].map((p) => ({ name: p.name, avatar: p.avatar }))
+export function roster(): Array<{ address: Address; name: string; avatar: number }> {
+  return [...players.values()]
+    .filter((p) => p.game === gameId)
+    .map((p) => ({ address: p.address, name: p.name, avatar: p.avatar }))
 }
 
 export function leaderboard(): Array<{ name: string; avatar: number; profit: number; address: Address }> {
@@ -414,7 +442,8 @@ export function snapshot(address?: Address): Record<string, unknown> {
   const staked = address && round ? round.stake.get(address) : undefined
   return {
     type: 'snapshot',
-    players: players.size,
+    // the room in THIS game, not everyone the server has ever seen
+    players: roster().length,
     gameId,
     manche,
     manches: MANCHES,

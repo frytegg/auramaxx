@@ -121,7 +121,7 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       const round = msg.round as Record<string, unknown> | null
       if (round) applyRound(round)
       setPlayers(Number(msg.players ?? 0))
-      renderRoster(msg.roster as Array<{ name?: unknown; avatar?: unknown }>)
+      renderRoster(msg.roster as Array<{ address?: unknown; name?: unknown; avatar?: unknown }>)
       // a reload must land back on the stage the game is actually in, not on the landing page
       // (betting happens before the clock, so an open round still shows the join QR)
       setStage(Number(msg.gameId ?? 0) === 0 ? 'lobby' : (manche === 0 && !round) || round?.phase === 'open' ? 'join' : 'game')
@@ -206,7 +206,7 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
     }
     case 'joined': {
       setPlayers(Number(msg.total ?? 0))
-      addToRoster(String(msg.name ?? ''), Number(msg.avatar ?? 0))
+      upsertRoster(String(msg.address ?? ''), String(msg.name ?? ''), Number(msg.avatar ?? 0))
       break
     }
     case 'gas': {
@@ -297,8 +297,19 @@ function setPlayers(total: number): void {
     total === 0 ? 'No players yet' : total === 1 ? '1 player joined' : `${total} players joined`
 }
 
-/** The lobby wall. Arrivals are appended one at a time so each name pops in on its own. */
-function addToRoster(name: string, avatar: number): void {
+/**
+ * The lobby wall, keyed by address. A player who renames sends a second 'joined' for an address
+ * already on the wall, so this updates in place instead of hanging a duplicate next to the old one.
+ */
+const rosterItems = new Map<string, HTMLElement>()
+
+function upsertRoster(address: string, name: string, avatar: number): void {
+  const existing = rosterItems.get(address)
+  if (existing) {
+    existing.querySelector('.av')!.textContent = avatarOf(avatar)
+    existing.querySelector('.nm')!.textContent = name
+    return
+  }
   const empty = $('roster').querySelector('.rosterEmpty')
   if (empty) empty.remove()
   const item = document.createElement('div')
@@ -307,13 +318,16 @@ function addToRoster(name: string, avatar: number): void {
   av.className = 'av'
   av.textContent = avatarOf(avatar)
   const label = document.createElement('span')
-  label.textContent = name // textContent, never innerHTML: these names come from the room
+  label.className = 'nm'
+  label.textContent = name // textContent, never innerHTML: these names are typed by the room
   item.append(av, label)
   $('roster').append(item)
+  rosterItems.set(address, item)
 }
 
-function renderRoster(rows: Array<{ name?: unknown; avatar?: unknown }> | undefined): void {
+function renderRoster(rows: Array<{ address?: unknown; name?: unknown; avatar?: unknown }> | undefined): void {
   $('roster').innerHTML = ''
+  rosterItems.clear()
   if (!rows || rows.length === 0) {
     const hint = document.createElement('div')
     hint.className = 'rosterEmpty'
@@ -321,7 +335,7 @@ function renderRoster(rows: Array<{ name?: unknown; avatar?: unknown }> | undefi
     $('roster').append(hint)
     return
   }
-  for (const row of rows) addToRoster(String(row.name ?? ''), Number(row.avatar ?? 0))
+  for (const row of rows) upsertRoster(String(row.address ?? ''), String(row.name ?? ''), Number(row.avatar ?? 0))
 }
 
 connect()
