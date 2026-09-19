@@ -1,0 +1,27 @@
+# Render blueprint — Monad Blitz rule 02: the submission must be a live public deployment,
+# locally-hosted projects are disqualified.
+services:
+  - type: web
+    name: auramaxx
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: corepack enable && pnpm -C web install --no-frozen-lockfile && pnpm -C web build && pnpm -C server install --no-frozen-lockfile && pnpm -C server build
+    startCommand: node server/dist/server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22.12.0"
+      - key: CHAIN_ID
+        value: "10143"
+      - key: RPC_URL
+        value: https://testnet-rpc.monad.xyz
+      - key: RPC_URL_FALLBACK
+        value: https://rpc.ankr.com/monad_testnet
+      - key: CONTRACT_ADDRESS
+        value: "0xaE65d2fa7AFE6FA2A2dB7F2a23d740514b1529D1"
+      # set these two by hand in the dashboard: they are secrets and never live in the repo
+      - key: RELAYER_PRIVATE_KEY
+        sync: false
+      - key: OP_KEY
+        sync: false

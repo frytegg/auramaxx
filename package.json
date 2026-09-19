@@ -1,0 +1,14 @@
+{
+  "name": "auramaxx",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bet on yourselves — a room-scale parimutuel on Monad, settled by a camera counting lit phones.",
+  "packageManager": "pnpm@10.19.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "pnpm -C web install --no-frozen-lockfile && pnpm -C web build && pnpm -C server install --no-frozen-lockfile && pnpm -C server build",
+    "start": "node server/dist/server.js",
+    "dev": "pnpm -C server dev",
+    "test": "pnpm -C web exec tsx src/tracker.test.ts && pnpm -C contracts exec forge test"
+  }
+}
