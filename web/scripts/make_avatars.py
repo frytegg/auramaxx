@@ -5,8 +5,8 @@
 Writes web/public/avatars/<index>.webp, 256x256, which Vite copies into the build as /avatars/<index>.webp.
 
 The INDEX is what a phone sends when it joins and what the contract stores for the player, so the
-list below is data: append new avatars at the end, never reorder or remove one. The game has five
-slots; the last two are still being drawn.
+list below is data: append new avatars at the end, never reorder or remove one. The game has six
+avatars; web/src/avatars.ts (AVATAR_COUNT) and server/src/game.ts (AVATAR_SLOTS) must agree with it.
 
 Needs Pillow. SVG sources are rasterised with headless Chrome (set CHROME if it is not at the default
 Windows path), because Pillow cannot read SVG.
@@ -41,13 +41,18 @@ class Avatar:
     crop: tuple[int, int, int, int]
     # 'cartoon' gives a photo the same drawn feel as the illustrated avatars
     cartoon: bool = False
+    # a flat white studio background is swapped for the app's colours, like a transparent one
+    white_background: bool = False
     note: str = ""
 
 
 AVATARS: list[Avatar] = [
     Avatar("pinault.jpg", (100, 80, 760, 740), cartoon=True, note="Martin, used with his permission"),
     Avatar("image.png", (240, 0, 960, 720), note="the general, drawn by a friend of the team"),
-    Avatar("photo_1_medium.svg", (100, 0, 700, 600), note="traced portrait, drawn by a friend of the team"),
+    Avatar("photo_1_medium.svg", (130, 0, 670, 540), note="traced portrait, drawn by a friend of the team"),
+    Avatar("avatar 4.png", (210, 0, 830, 620), note="curly hair and a watch, drawn by a friend of the team"),
+    Avatar("avatar 5.png", (280, 0, 920, 640), note="swimming goggles, drawn by a friend of the team"),
+    Avatar("avatar 6.png", (40, 2, 216, 178), white_background=True, note="strawberry figurine, drawn by a friend of the team"),
 ]
 
 
@@ -104,11 +109,26 @@ def cartoon(image: Image.Image) -> Image.Image:
     return ImageEnhance.Sharpness(out).enhance(1.30)
 
 
+def clear_white_background(image: Image.Image, tolerance: int = 40) -> Image.Image:
+    """Floods the near-white area touching the border with transparency, so it takes the backdrop.
+    Only what is connected to the edge goes: a white detail inside the subject is left alone."""
+    out = image.convert("RGBA")
+    width, height = out.size
+    seeds = [(0, 0), (width - 1, 0), (0, height - 1), (width - 1, height - 1), (width // 2, 0), (0, height // 2), (width - 1, height // 2)]
+    for seed in seeds:
+        r, g, b, a = out.getpixel(seed)
+        if a == 255 and min(r, g, b) >= 235:
+            ImageDraw.floodfill(out, seed, (0, 0, 0, 0), thresh=tolerance)
+    return out
+
+
 def build(index: int, avatar: Avatar) -> Path:
     path = SOURCES / avatar.source
     if not path.exists():
         sys.exit(f"missing source picture: {path}")
     image = rasterise_svg(path) if path.suffix.lower() == ".svg" else Image.open(path).convert("RGBA")
+    if avatar.white_background:
+        image = clear_white_background(image)
 
     left, top, right, bottom = avatar.crop
     if right - left != bottom - top:
