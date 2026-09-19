@@ -288,6 +288,7 @@ function handle(msg: Record<string, unknown>): void {
     }
     case 'open': {
       shownPhase = ''
+      $('finalRank').classList.remove('on')
       round = {
         id: Number(msg.roundId),
         kind: Number(msg.kind) as 0 | 1,
@@ -377,8 +378,23 @@ function handle(msg: Record<string, unknown>): void {
         myStake === 0 ? '#888' : verdict === 'WON' ? 'var(--up)' : verdict === 'SPLIT' ? 'var(--gold)' : 'var(--down)'
       const label = winner === 0 ? 'OVER' : 'UNDER'
       $('resultSub').textContent = `${label} · ${String(msg.count ?? 0)} screens counted, threshold ${String(msg.threshold ?? 0)} · round ${manche}/2`
-      renderBoard(msg.leaderboard as Array<Record<string, unknown>>, Number(you?.profit ?? 0))
+      // 'resolved' is a broadcast with no per-player field: read this phone's score off the board
+      const board = msg.leaderboard as Array<Record<string, unknown>> | undefined
+      const mine = board?.find((row) => String(row.address ?? '').toLowerCase() === account.address.toLowerCase())
+      renderBoard(board, Number(mine?.profit ?? you?.profit ?? 0))
       show('vResult')
+      break
+    }
+    case 'final': {
+      // the game is over: this player's own avatar and place, the same podium the projector shows
+      const rows = (msg.standings ?? []) as Array<{ address?: string }>
+      const place = rows.findIndex((r) => String(r.address ?? '').toLowerCase() === account.address.toLowerCase())
+      $('finalRank').innerHTML =
+        `<div class="face">${avatarHtml(avatar)}</div>` +
+        (place >= 0
+          ? `<div class="rk">#${place + 1}</div><div class="of">final rank · top ${rows.length}</div>`
+          : `<div class="of">not in the top ${rows.length} this time</div>`)
+      $('finalRank').classList.add('on')
       break
     }
     case 'payout': {

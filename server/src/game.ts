@@ -73,6 +73,13 @@ export const players = new Map<Address, Player>()
 let round: RoundState | null = null
 let manche = 0
 /**
+ * The end-of-game podium, frozen when the last manche resolves. It must be a copy: payoutMon()
+ * zeroes every profit on chain (paid once), so a podium read live after the MON payout would show
+ * everyone at 0 at the exact moment the room is looking at it.
+ */
+type Standing = { address: Address; name: string; avatar: number; profit: number }
+let finalStandings: Standing[] | null = null
+/**
  * 0 means no game is open and the projector shows its landing page.
  *
  * `gameSeq` only ever counts up, and `gameId` takes its value. Deriving the id from a counter that
@@ -105,6 +112,7 @@ function emit(event: Record<string, unknown>): void {
 export function newGame(): { gameId: number; players: number } {
   round = null
   manche = 0
+  finalStandings = null
   gameSeq += 1
   gameId = gameSeq
   emit({ type: 'game', gameId, players: 0 })
@@ -124,6 +132,7 @@ export function newGame(): { gameId: number; players: number } {
 export function resetGame(): { gameId: number } {
   round = null
   manche = 0
+  finalStandings = null
   gameId = 0
   emit({ type: 'game', gameId, players: 0 })
   log.info('reset to the landing page')
@@ -387,6 +396,11 @@ export async function settle(): Promise<void> {
       leaderboard: leaderboard(),
     })
     log.info({ id: r.id, winner: r.winner, ms: Date.now() - started }, 'round resolved')
+
+    if (manche >= MANCHES) {
+      finalStandings = standings()
+      emit({ type: 'final', standings: finalStandings })
+    }
   } catch (error: unknown) {
     log.error({ err: String(error) }, 'settle failed')
     r.phase = 'frozen'
@@ -433,6 +447,15 @@ export function roster(): Array<{ address: Address; name: string; avatar: number
   return [...players.values()]
     .filter((p) => p.game === gameId)
     .map((p) => ({ address: p.address, name: p.name, avatar: p.avatar }))
+}
+
+/** This game's players only, best first: what the final podium shows (top 3 + 4th to 10th). */
+function standings(): Standing[] {
+  return [...players.values()]
+    .filter((p) => p.game === gameId)
+    .map((p) => ({ address: p.address, name: p.name, avatar: p.avatar, profit: p.profit }))
+    .sort((a, b) => b.profit - a.profit)
+    .slice(0, 10)
 }
 
 export function leaderboard(): Array<{ name: string; avatar: number; profit: number; address: Address }> {
@@ -486,6 +509,7 @@ export function snapshot(address?: Address): Record<string, unknown> {
         }
       : null,
     leaderboard: leaderboard(),
+    final: finalStandings,
     roster: roster(),
     price: currentPrice(),
     priceHistory: priceHistory(Date.now() - 120_000),

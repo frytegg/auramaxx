@@ -4,7 +4,7 @@
  */
 import { JOIN_URL, WS_URL, api } from './api.js'
 import { mountMascot } from './avatar.js'
-import { avatarImg } from './avatars.js'
+import { avatarHtml, avatarImg } from './avatars.js'
 
 const $ = (id: string): HTMLElement => document.getElementById(id)!
 
@@ -126,8 +126,15 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       // (betting happens before the clock, so an open round still shows the join QR)
       setStage(Number(msg.gameId ?? 0) === 0 ? 'lobby' : (manche === 0 && !round) || round?.phase === 'open' ? 'join' : 'game')
       renderLeaderboard(msg.leaderboard as Array<Record<string, unknown>>)
+      // a reload after the last manche lands straight on the podium
+      if (Array.isArray(msg.final)) showFinal(msg.final as Standing[], 0)
+      else hideFinal()
       break
     }
+    case 'final':
+      // let the last manche's OVER/UNDER flash land first, then the podium
+      showFinal(msg.standings as Standing[], 7000)
+      break
     case 'game': {
       setManche(0)
       setPlayers(Number(msg.players ?? 0))
@@ -138,6 +145,7 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       renderRoster(undefined) // a fresh game starts with an empty wall
       // gameId 0 is the régie sending everyone back to the landing page
       setStage(Number(msg.gameId ?? 1) === 0 ? 'lobby' : 'join')
+      hideFinal()
       hideFlash()
       break
     }
@@ -223,6 +231,7 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       $('flashSub').textContent = `${String(msg.winners ?? 0)} winners · ${Number(msg.totalMon ?? 0).toFixed(2)} MON · one transaction`
       $('flashHash').textContent = String(msg.txHash ?? '')
       $('flash').classList.add('on')
+      setTimeout(hideFlash, 8000) // back to the podium, which kept the scores from before the payout
       break
     }
     default:
@@ -279,6 +288,62 @@ function renderLeaderboard(rows: Array<Record<string, unknown>> | undefined): vo
 
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
+}
+
+// --- the final podium ----------------------------------------------------------------------
+
+type Standing = { name: string; avatar: number; profit: number }
+let finalTimer: ReturnType<typeof setTimeout> | null = null
+
+const CROWN =
+  '<svg class="crown" width="44" height="31" viewBox="0 0 34 24" aria-hidden="true">' +
+  '<path d="M2 20 L6 6 L13 14 L17 3 L21 14 L28 6 L32 20 Z" fill="#FFD166" stroke="#170013" stroke-width="1"></path></svg>'
+
+function fmtAura(n: number): string {
+  return `+${Math.max(0, Math.round(n)).toLocaleString('en-US')} AURA`
+}
+
+/** The avatar each player picked at signup, on the podium. Names are escaped: the room typed them. */
+function podiumCol(rank: 1 | 2 | 3, p: Standing | undefined): string {
+  if (!p) return `<div class="pcol r${rank}" style="visibility:hidden"></div>`
+  return `
+    <div class="pcol r${rank}">
+      <div class="ring">${rank === 1 ? CROWN : ''}<div class="face">${avatarHtml(p.avatar)}</div></div>
+      <span class="nm">${escapeHtml(p.name)}</span>
+      <span class="sc">${fmtAura(p.profit)}</span>
+      <div class="block"><span class="rk">${rank}</span></div>
+    </div>`
+}
+
+function showFinal(rows: Standing[] | undefined, delayMs: number): void {
+  if (!rows) return
+  if (finalTimer) clearTimeout(finalTimer)
+  const render = (): void => {
+    const [first, second, third, ...rest] = rows
+    // classic podium order, left to right: 2nd, 1st, 3rd
+    $('podium').innerHTML = podiumCol(2, second) + podiumCol(1, first) + podiumCol(3, third)
+    $('rest').innerHTML = rest
+      .map(
+        (p, i) => `
+        <div class="rrow">
+          <span class="rk">${i + 4}</span>
+          <div class="face">${avatarHtml(p.avatar)}</div>
+          <span class="nm">${escapeHtml(p.name)}</span>
+          <span class="sc">${fmtAura(p.profit)}</span>
+        </div>`,
+      )
+      .join('')
+    $('final').classList.add('on')
+    hideFlash()
+  }
+  if (delayMs > 0) finalTimer = setTimeout(render, delayMs)
+  else render()
+}
+
+function hideFinal(): void {
+  if (finalTimer) clearTimeout(finalTimer)
+  finalTimer = null
+  $('final').classList.remove('on')
 }
 
 function hideFlash(): void {

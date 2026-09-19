@@ -100,6 +100,11 @@
       .board { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 10px 16px; }
       .board .row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 16px; border-bottom: 1px solid var(--border); }
       .board .row:last-child { border-bottom: none; }
+      .finalRank { margin-top: 18px; display: none; flex-direction: column; align-items: center; gap: 8px; }
+      .finalRank.on { display: flex; }
+      .finalRank .face { width: 72px; height: 72px; border-radius: 50%; overflow: hidden; border: 3px solid var(--gold); }
+      .finalRank .rk { font-family: 'Anton', sans-serif; font-size: 44px; color: var(--gold); letter-spacing: .03em; }
+      .finalRank .of { font-size: 15px; color: var(--text-dim); }
       .key { word-break: break-all; font-size: 12px; background: var(--surface); border: 1px solid var(--border); padding: 12px; border-radius: 12px; color: var(--text-dim); font-family: ui-monospace, monospace; }
       .warn { font-size: 13px; color: var(--text-faint); line-height: 1.5; text-align: center; }
       .spacer { flex: 1; }
@@ -155,6 +160,7 @@
       <div class="result">
         <div class="big" id="resultBig">—</div>
         <div class="sub" id="resultSub"></div>
+        <div class="finalRank" id="finalRank"></div>
       </div>
       <div class="board" id="resultBoard"></div>
       <div id="walletBox" style="display:none">

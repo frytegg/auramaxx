@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Aura Max — Classement final</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  @keyframes driftDots3 { 0% { background-position: 0 0, 40px 40px; } 100% { background-position: 160px 160px, 200px 200px; } }
+  @keyframes crownGlow { 0%, 100% { filter: drop-shadow(0 0 10px rgba(255,209,102,0.7)); } 50% { filter: drop-shadow(0 0 20px rgba(255,209,102,1)); } }
+  @keyframes podiumGlow1 { 0%, 100% { box-shadow: 0 0 40px rgba(255,46,158,0.55); } 50% { box-shadow: 0 0 70px rgba(255,46,158,0.85); } }
+
+  .podium-wrap { display: flex; align-items: flex-end; justify-content: center; gap: 40px; }
+  .podium-col { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 220px; }
+  .avatar-ring { width: 96px; height: 96px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--surface); box-sizing: border-box; }
+  .podium-name { font-size: 18px; font-weight: 700; color: var(--text); }
+  .podium-score { font-family: 'Anton', sans-serif; font-size: 20px; color: var(--magenta-soft); }
+  .podium-block { width: 100%; border-radius: 16px 16px 0 0; display: flex; align-items: flex-start; justify-content: center; padding-top: 14px; box-sizing: border-box; }
+  .rank-number { font-family: 'Anton', sans-serif; font-size: 40px; }
+
+  .rank-1 .avatar-ring { width: 116px; height: 116px; border: 4px solid var(--gold); }
+  .rank-1 .podium-block { height: 230px; background: linear-gradient(180deg, #3A1030 0%, #24081F 100%); border: 2px solid var(--magenta); animation: podiumGlow1 2.2s ease-in-out infinite; }
+  .rank-1 .rank-number { color: var(--gold); }
+  .rank-1 .podium-score { color: var(--gold); font-size: 24px; }
+
+  .rank-2 .avatar-ring { border: 4px solid var(--magenta-soft); }
+  .rank-2 .podium-block { height: 160px; background: var(--surface-2); border: 2px solid var(--border); }
+  .rank-2 .rank-number { color: var(--magenta-soft); }
+
+  .rank-3 .avatar-ring { border: 4px solid var(--violet); }
+  .rank-3 .podium-block { height: 108px; background: var(--surface-2); border: 2px solid var(--border); }
+  .rank-3 .rank-number { color: var(--violet); }
+
+  .crown { position: absolute; top: -30px; left: 50%; transform: translateX(-50%); animation: crownGlow 1.8s ease-in-out infinite; }
+
+  .rest-list { display: flex; flex-direction: column; gap: 8px; width: 560px; margin: 0 auto; }
+  .rest-row { display: flex; align-items: center; gap: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 16px; }
+  .rest-rank { font-family: 'Anton', sans-serif; font-size: 16px; color: var(--text-faint); width: 24px; }
+  .rest-avatar { width: 34px; height: 34px; border-radius: 50%; overflow: hidden; background: var(--surface-2); display: flex; align-items: center; justify-content: center; }
+  .rest-name { flex: 1; font-size: 15px; color: var(--text); }
+  .rest-score { font-family: 'Anton', sans-serif; font-size: 15px; color: var(--text-dim); }
+</style>
+</head>
+<body>
+<div class="screen-wide">
+  <div style="position: absolute; inset: 0; opacity: 0.18; background-image: radial-gradient(rgba(255,46,158,0.35) 2px, transparent 2.5px), radial-gradient(rgba(255,46,158,0.18) 2px, transparent 2.5px); background-size: 80px 80px, 120px 120px; animation: driftDots3 14s linear infinite;"></div>
+
+  <div style="position: relative; text-align: center; padding: 40px 64px 0; display: flex; flex-direction: column; gap: 6px;">
+    <span style="font-size: 15px; letter-spacing: 4px; color: var(--text-dim); text-transform: uppercase;">Fin de la partie</span>
+    <span class="wordmark" style="font-size: 34px; letter-spacing: 3px;">CLASSEMENT AURA MAX</span>
+  </div>
+
+  <div style="position: relative; flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 34px; padding: 10px 40px 30px;">
+    <div class="podium-wrap" id="podium"></div>
+    <div class="rest-list" id="rest-list"></div>
+  </div>
+</div>
+
+<script type="module">
+  import { avatarSvg } from '../assets/avatars.js';
+
+  // >>> INTEGRATION POINT <<<
+  // Demo standings only — replace with the real cumulative $AURA gains per
+  // player across the whole session (warm-up questions + every Aura Max
+  // round), computed server-side once the final round freezes. `avatar`
+  // is the same 0-5 index the player picked on the onboarding screen, so
+  // carry that value through your session/player record.
+  const standings = [
+    { name: 'Anna', avatar: 4, gains: 4820 },
+    { name: 'Léa', avatar: 0, gains: 4260 },
+    { name: 'Camille', avatar: 5, gains: 3610 },
+    { name: 'Enzo', avatar: 3, gains: 2040 },
+    { name: 'Nathan', avatar: 1, gains: 1780 },
+    { name: 'Hugo', avatar: 2, gains: 1520 },
+    { name: 'Chloé', avatar: 4, gains: 1120 },
+  ];
+
+  const [first, second, third, ...rest] = standings;
+
+  function podiumCol(rank, player, avatarSize) {
+    if (!player) return '';
+    const crown = rank === 1
+      ? `<svg class="crown" width="34" height="24" viewBox="0 0 34 24" aria-hidden="true">
+           <path d="M2 20 L6 6 L13 14 L17 3 L21 14 L28 6 L32 20 Z" fill="#FFD166" stroke="#170013" stroke-width="1"></path>
+         </svg>`
+      : '';
+    return `
+      <div class="podium-col rank-${rank}">
+        <div style="position: relative;">
+          ${crown}
+          <div class="avatar-ring">${avatarSvg(player.avatar, avatarSize)}</div>
+        </div>
+        <span class="podium-name">${player.name}</span>
+        <span class="podium-score">+${player.gains.toLocaleString('fr-FR')} $AURA</span>
+        <div class="podium-block"><span class="rank-number">${rank}</span></div>
+      </div>`;
+  }
+
+  // Visual order left-to-right is 2nd / 1st / 3rd, the classic podium shape.
+  document.getElementById('podium').innerHTML =
+    podiumCol(2, second, 72) + podiumCol(1, first, 88) + podiumCol(3, third, 64);
+
+  document.getElementById('rest-list').innerHTML = rest.map((p, i) => `
+    <div class="rest-row">
+      <span class="rest-rank">${i + 4}</span>
+      <div class="rest-avatar">${avatarSvg(p.avatar, 24)}</div>
+      <span class="rest-name">${p.name}</span>
+      <span class="rest-score">+${p.gains.toLocaleString('fr-FR')} $AURA</span>
+    </div>`).join('');
+</script>
+</body>
+</html>

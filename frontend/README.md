@@ -13,6 +13,7 @@ assets/
   style.css              tokens de couleur, polices, styles partagés (boutons, toggles, chips)
   chip-mise.js            widget de mise empilable (jetons 100/200/500/1000/ALL + Annuler)
   round-timer.js          toggle UP/DOWN avec countdown + cooldown de 4s
+  avatars.js              les 6 avatars originaux, réutilisés par l'onboarding et le podium
 telephone/                écrans joueur (390×844)
   onboarding.html          choix avatar + pseudo, 1000 $AURA offerts
   warmup.html              question BTC 1 — mise classique
@@ -24,6 +25,7 @@ projo/                    écrans vidéoprojecteur salle (1600×900)
   ambiant.html             countdown ambiant pendant le round
   reveal.html              reveal plein écran (réutilisé pour #1 et #2)
   freeze.html              freeze + grille des joueurs gagnants/perdants
+  classement.html          classement final — podium 1/2/3 (avatar + pseudo + gains) + liste 4-10
 operateur/
   index.html               panneau de régie — contrôle des 4 étapes du round
                             + résolution manuelle des questions d'échauffement
@@ -73,7 +75,12 @@ valeurs statiques de démo. En résumé :
    maquette au-delà de l'état gagnant).
 6. **Avatars & pseudo** (`telephone/onboarding.html`) — stockés en
    `sessionStorage` pour la démo ; à remplacer par la vraie session/auth
-   joueur.
+   joueur. L'index d'avatar choisi doit être conservé sur l'enregistrement
+   du joueur pour ressortir sur le podium final.
+7. **Classement final** (`projo/classement.html`) — le tableau `standings`
+   est statique. À remplacer par le cumul réel des gains $AURA par joueur
+   sur toute la session (échauffement + rounds Aura Max), calculé une fois
+   le dernier round réglé.
 
 Aucune dépendance crypto/jargon n'a été introduite dans l'UI — le ton
 "jetons/$AURA", zéro jargon technique, reste intact, conformément au brief
