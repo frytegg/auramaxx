@@ -24,7 +24,7 @@ services:
       - key: RPC_URL_FALLBACK
         value: https://rpc.ankr.com/monad_testnet
       - key: CONTRACT_ADDRESS
-        value: "0xaE65d2fa7AFE6FA2A2dB7F2a23d740514b1529D1"
+        value: "0x0079c8A953C571f481D88195dBacC63dFE462910"
       # set these two by hand in the dashboard: they are secrets and never live in the repo
       - key: RELAYER_PRIVATE_KEY
         sync: false
