@@ -10,6 +10,7 @@
 import { avatarHtml } from './avatars.js'
 import { WS_URL, api } from './api.js'
 import { reloadOnNewBuild } from './build-watch.js'
+import { lineText } from './line.js'
 
 function $<T extends HTMLElement = HTMLElement>(id: string): T {
   const element = document.getElementById(id)
@@ -402,7 +403,9 @@ function handle(msg: Msg): void {
       s.threshold = optNum(msg.threshold) ?? s.threshold
       s.count = 0
       points = [[0, 0]]
-      log(`Clock started · projected line ${s.threshold ?? '?'}`)
+      // fixed from here: joins are held until the round settles, so the contract lands on the same one
+      s.thresholdOnChain = true
+      log(`Clock started · line ${s.threshold === null ? '?' : lineText(s.threshold)}, fixed for this round`)
       break
     }
     case 'tick': {
@@ -449,7 +452,11 @@ function handle(msg: Msg): void {
       s.phase = 'frozen'
       s.hidden = false
       setPools(msg)
-      log('Clock stopped · committing bets on-chain')
+      log(
+        msg.reason === 'line'
+          ? `Line passed with ${Math.ceil(num(msg.remainingMs, 0) / 1000)} s left · OVER is decided, the round ends now`
+          : 'Clock stopped · committing bets on-chain',
+      )
       break
     }
     case 'threshold': {
@@ -457,7 +464,7 @@ function handle(msg: Msg): void {
       if (line !== null) {
         s.threshold = line
         s.thresholdOnChain = true
-        log(`Line set by the contract: ${line}`)
+        log(`Line set by the contract: ${lineText(line)}`)
       }
       break
     }
@@ -576,7 +583,7 @@ function drawMarket(): void {
   if (s.manche === 0) {
     title.textContent = s.gameId === 0 ? 'Open betting to start round 1' : 'The room is scanning in. Open betting when it is ready.'
   } else {
-    title.innerHTML = `Will the room light up more than <span class="line">${s.threshold === null ? '…' : fmt.format(s.threshold)}</span> times?`
+    title.innerHTML = `Will the room light up more than <span class="line">${s.threshold === null ? '…' : lineText(s.threshold)}</span> times?`
   }
 
   // the clock: grey until it runs, magenta for the last ten seconds
@@ -605,13 +612,13 @@ function drawMarket(): void {
   // the headline: where the count stands against the line
   const hasRound = s.manche > 0 && s.phase !== 'idle'
   $('tickerCount').textContent =
-    hasRound && s.count !== null ? `${fmt.format(s.count)} · line ${s.threshold === null ? '…' : fmt.format(s.threshold)}` : '—'
+    hasRound && s.count !== null ? `${fmt.format(s.count)} · line ${s.threshold === null ? '…' : lineText(s.threshold)}` : '—'
   const delta = $('delta')
   delta.className = 'delta num'
   delta.textContent = ''
   if (hasRound && s.count !== null && s.threshold !== null && s.phase !== 'open') {
     if (s.count > s.threshold) {
-      delta.textContent = `OVER by ${fmt.format(s.count - s.threshold)}`
+      delta.textContent = 'Line passed · OVER'
       delta.classList.add('over')
     } else {
       delta.textContent = `${fmt.format(s.threshold + 1 - s.count)} more for OVER`
@@ -619,7 +626,7 @@ function drawMarket(): void {
     }
   }
   const source = $('lineSrc')
-  source.textContent = !hasRound || s.threshold === null ? '' : s.thresholdOnChain ? 'Line set by the contract' : 'Projected line · the contract sets it at the lock'
+  source.textContent = !hasRound || s.threshold === null ? '' : s.thresholdOnChain ? 'Line fixed for this round' : 'Projected line · fixed when the clock starts'
   source.classList.toggle('chain', s.thresholdOnChain)
 }
 
@@ -672,7 +679,7 @@ function drawVerdict(): void {
     who.className = `who ${v.winner === 0 ? 'over' : 'under'}`
     const settled = v.settleMs === null ? '' : ` · settled in <b>${fmt.format(v.settleMs)} ms</b>`
     const outcome = v.bettors === 0 ? 'nobody had bet: nothing won or lost' : `<b>${fmt.format(v.paid)}</b> paid`
-    facts.innerHTML = `<b>${fmt.format(v.count)}</b> light-ups vs a line of <b>${v.threshold === null ? '?' : fmt.format(v.threshold)}</b> · ${outcome}${settled}`
+    facts.innerHTML = `<b>${fmt.format(v.count)}</b> light-ups vs a line of <b>${v.threshold === null ? '?' : lineText(v.threshold)}</b> · ${outcome}${settled}`
     hash = v.txHash
   } else {
     box.hidden = true
@@ -778,7 +785,7 @@ function drawChart(): void {
     const gy = y(value)
     parts.push(`<line x1="${left}" x2="${left + plotW}" y1="${gy}" y2="${gy}" stroke="#2A2031" stroke-width="1"/>`)
     // the line's own tag sits on this axis; an axis label under it would only read as noise
-    if (showLine && line !== null && Math.abs(gy - y(line)) < 16) continue
+    if (showLine && line !== null && Math.abs(gy - y(line + 0.5)) < 16) continue
     parts.push(`<text x="${left + plotW + 12}" y="${gy + 4}">${fmt.format(value)}</text>`)
   }
   for (let i = 0; i <= 3; i++) {
@@ -794,11 +801,12 @@ function drawChart(): void {
   }
 
   if (showLine && line !== null) {
-    const ly = y(line)
+    // drawn at N.5: between the last count that is UNDER and the first that is OVER
+    const ly = y(line + 0.5)
     parts.push(`<line x1="${left}" x2="${left + plotW}" y1="${ly}" y2="${ly}" stroke="#F6F1F5" stroke-width="1.5" stroke-dasharray="6 5"/>`)
     parts.push(`<text class="linelbl" x="${left + 4}" y="${ly - 8}">${s.thresholdOnChain ? 'Line' : 'Projected line'}</text>`)
     parts.push(`<rect x="${left + plotW + 4}" y="${ly - 11}" width="${right - 6}" height="22" rx="4" fill="#F6F1F5"/>`)
-    parts.push(`<text class="tagtxt" x="${left + plotW + 4 + (right - 6) / 2}" y="${ly + 4.5}" text-anchor="middle">${fmt.format(line)}</text>`)
+    parts.push(`<text class="tagtxt" x="${left + plotW + 4 + (right - 6) / 2}" y="${ly + 4.5}" text-anchor="middle">${lineText(line)}</text>`)
   }
 
   if (last) {

@@ -6,6 +6,7 @@ import { JOIN_URL, WS_URL, api } from './api.js'
 import { mountMascot } from './avatar.js'
 import { avatarHtml, avatarImg } from './avatars.js'
 import { reloadOnNewBuild } from './build-watch.js'
+import { lineText } from './line.js'
 
 const $ = (id: string): HTMLElement => document.getElementById(id)!
 
@@ -189,7 +190,7 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
     case 'start': {
       $('question').textContent = SHOW
       $('liveCount').textContent = '0'
-      $('liveThreshold').textContent = String(msg.threshold ?? '?')
+      showLine(msg.threshold)
       setStage('game')
       setCamera(true)
       break
@@ -202,13 +203,13 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       if (msg.hidden === false) showPools(msg)
       else setHidden(true)
       if (msg.count !== undefined) $('liveCount').textContent = String(msg.count)
-      if (msg.threshold !== undefined && msg.threshold !== null) $('liveThreshold').textContent = String(msg.threshold)
+      showLine(msg.threshold)
       if (msg.phase === 'live' || msg.phase === 'reveal') setStage('game')
       setCamera(CAMERA_PHASES.has(String(msg.phase)))
       break
     }
     case 'threshold':
-      $('liveThreshold').textContent = String(msg.threshold ?? '?')
+      showLine(msg.threshold)
       break
     case 'reveal': {
       // the clock pauses here until the régie resumes it: the odds, and betting open again
@@ -235,7 +236,8 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       $('flashBig').textContent = winner
       $('flashBig').style.color = winner === 'OVER' ? 'var(--up)' : 'var(--down)'
       $('liveCount').textContent = String(msg.count ?? 0)
-      const versus = `${String(msg.count ?? 0)} light-ups vs a line of ${String(msg.threshold ?? 0)}`
+      const early = msg.early === true ? ` with ${Math.ceil(Number(msg.remainingMs ?? 0) / 1000)} s to spare` : ''
+      const versus = `${String(msg.count ?? 0)} light-ups vs a line of ${lineText(Number(msg.threshold ?? 0))}${early}`
       // nobody bet: the count still lands, but nothing was won or lost, and no one was paid
       $('flashSub').textContent =
         Number(msg.bettors ?? -1) === 0
@@ -289,11 +291,17 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
 
 function applyRound(round: Record<string, unknown>): void {
   $('question').textContent = QUESTION
-  if (round.threshold !== null && round.threshold !== undefined) $('liveThreshold').textContent = String(round.threshold)
+  showLine(round.threshold)
   if (round.count !== undefined) $('liveCount').textContent = String(round.count)
   $('phase').textContent = phaseLabel(String(round.phase ?? ''))
   setHidden(round.hidden !== false)
   if (round.hidden === false) showPools(round)
+}
+
+/** The line as the room reads it: N.5, so 9 is UNDER and 10 is OVER with nothing to argue about. */
+function showLine(value: unknown): void {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) return
+  $('liveThreshold').textContent = lineText(Number(value))
 }
 
 function setHidden(hidden: boolean): void {

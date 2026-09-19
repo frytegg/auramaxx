@@ -213,7 +213,7 @@ app.post('/op/open', async (request, reply) => {
 
 app.post('/op/start', async (request, reply) => {
   if (!guard(request)) return reply.code(403).send({ error: 'nope' })
-  start()
+  await start()
   return { ok: true }
 })
 

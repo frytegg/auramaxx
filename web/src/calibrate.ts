@@ -13,6 +13,7 @@
 import { DEFAULTS, GRID_H, GRID_W, MagentaDetector, type Options } from './detect.js'
 import { linkCamera, type LinkState } from './camera-link.js'
 import { reloadOnNewBuild } from './build-watch.js'
+import { lineText } from './line.js'
 
 function $<T extends HTMLElement = HTMLElement>(id: string): T {
   const element = document.getElementById(id)
@@ -31,6 +32,9 @@ const ctx: CanvasRenderingContext2D = context
 
 const detector = new MagentaDetector()
 let lastVisible = 0
+/** When the detector last processed a frame: a page that is not seeing anything sends nothing. */
+let lastFrameAt = 0
+const WATCHING_MS = 1_000
 let link: LinkState = {
   keyed: false,
   connected: false,
@@ -40,6 +44,7 @@ let link: LinkState = {
   remainingMs: null,
   threshold: null,
   revealN: 0,
+  crossed: false,
 }
 /** ?embed=1: this page is running inside the projector, which owns the keyboard and the pointer. */
 const EMBEDDED = new URLSearchParams(location.search).get('embed') === '1'
@@ -136,12 +141,18 @@ function restoreDefaults(): void {
 
 // --- the game ------------------------------------------------------------------------------------------
 
-linkCamera(detector, () => lastVisible, (state) => {
-  link = state
-  drawStatus()
-  drawClock()
-  drawLinkInfo()
-})
+linkCamera(
+  detector,
+  () => lastVisible,
+  (state) => {
+    link = state
+    drawStatus()
+    drawClock()
+    drawLinkInfo()
+  },
+  // no picture, no count: a dead camera must not own the round nor overwrite the régie's count
+  () => !videoDead && performance.now() - lastFrameAt < WATCHING_MS,
+)
 
 /** The round's clock, as the server counts it: paused on a reveal, hurried for the last ten seconds. */
 function drawClock(): void {
@@ -178,7 +189,7 @@ function drawStatus(): void {
       case 'frozen':
       case 'settling':
         tone = 'final'
-        text = 'Clock stopped · settling on-chain'
+        text = link.crossed ? 'Line passed · OVER wins' : 'Clock stopped · settling on-chain'
         break
       case 'resolved':
         tone = 'final'
@@ -262,7 +273,7 @@ function drawCounter(visible: number): void {
   const sub = $('counterSub')
   if (view.sub === null) {
     // numbers only in here: nothing the room typed ever reaches this markup
-    const line = link.threshold === null || view.mode === 'warmup' ? '' : ` · line <b>${link.threshold}</b>`
+    const line = link.threshold === null || view.mode === 'warmup' ? '' : ` · line <b>${lineText(link.threshold)}</b>`
     sub.innerHTML = `<b>${visible}</b> ${visible === 1 ? 'screen' : 'screens'} on camera${line}`
   } else sub.textContent = view.sub
 }
@@ -399,6 +410,7 @@ function draw(): void {
 
   const result = detector.process(video, performance.now())
   lastVisible = result.visible
+  lastFrameAt = performance.now()
 
   const dpr = window.devicePixelRatio || 1
   const w = overlay.clientWidth

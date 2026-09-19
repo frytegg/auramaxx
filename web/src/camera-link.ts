@@ -33,6 +33,8 @@ export type LinkState = {
   threshold: number | null
   /** which reveal the clock is paused on, 0 when it is not */
   revealN: number
+  /** the room passed the line with time left: the clock stopped there, OVER is decided */
+  crossed: boolean
 }
 
 const PHASES: readonly GamePhase[] = ['idle', 'open', 'live', 'reveal', 'frozen', 'settling', 'resolved']
@@ -48,7 +50,17 @@ function optNum(value: unknown): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-export function linkCamera(detector: Countable, visibleNow: () => number, onChange: (state: LinkState) => void): void {
+/**
+ * `watching` says whether the detector is actually seeing frames. A page with no picture (no camera,
+ * a stalled one, the video killed) must stay silent: pushing its 0 would own the round's count,
+ * shut out a camera that works, and overwrite the count the régie types in by hand.
+ */
+export function linkCamera(
+  detector: Countable,
+  visibleNow: () => number,
+  onChange: (state: LinkState) => void,
+  watching: () => boolean,
+): void {
   const fromUrl = new URLSearchParams(location.search).get('k')
   if (fromUrl) localStorage.setItem('auramaxx.opkey', fromUrl)
   const key = fromUrl ?? localStorage.getItem('auramaxx.opkey') ?? ''
@@ -62,6 +74,7 @@ export function linkCamera(detector: Countable, visibleNow: () => number, onChan
     remainingMs: null,
     threshold: null,
     revealN: 0,
+    crossed: false,
   }
   let last = ''
   const emit = (): void => {
@@ -118,6 +131,8 @@ export function linkCamera(detector: Countable, visibleNow: () => number, onChan
         break
       case 'freeze':
         state.phase = 'frozen'
+        state.crossed = msg.reason === 'line'
+        state.serverCount = optNum(msg.count) ?? state.serverCount
         break
       case 'resolved':
         state.phase = 'resolved'
@@ -126,6 +141,7 @@ export function linkCamera(detector: Countable, visibleNow: () => number, onChan
         break
       case 'open':
         state.phase = 'open'
+        state.crossed = false
         state.serverCount = null
         state.remainingMs = optNum(msg.durationMs)
         state.threshold = null
@@ -173,7 +189,7 @@ export function linkCamera(detector: Countable, visibleNow: () => number, onChan
   }
 
   setInterval(() => {
-    if (!state.keyed || !state.live || socket?.readyState !== WebSocket.OPEN) return
+    if (!state.keyed || !state.live || !watching() || socket?.readyState !== WebSocket.OPEN) return
     socket.send(JSON.stringify({ type: 'camera', key, total: detector.total, visible: visibleNow() }))
   }, SEND_EVERY_MS)
 

@@ -74,6 +74,14 @@ type RoundState = {
   txHash: Hex | null
   settleMs: number | null
   paid: number
+  /**
+   * The line, fixed when the clock starts. Joins are held from then until the round settles, so the
+   * contract computes the very same number at the lock — which is what lets the round end the moment
+   * the count passes it.
+   */
+  line: number | null
+  /** The count passed the line before the clock ran out: OVER was decided, the round ended there. */
+  endedEarly: boolean
 }
 
 export const players = new Map<Address, Player>()
@@ -205,8 +213,40 @@ export function join(address: Address, name: string, avatar: number): Player {
   return player
 }
 
-/** Batched so 40 arrivals cost one transaction, not 40. */
+/**
+ * While a round runs, arrivals wait: registering them would change the number of players the
+ * contract computes the line from at the lock, after the room has already seen and bet on it.
+ * They go on chain the moment the round settles, and play from the next one.
+ */
+function joinsHeld(): boolean {
+  return round !== null && ['live', 'reveal', 'frozen', 'settling'].includes(round.phase)
+}
+
+let flushing: Promise<void> | null = null
+
 async function flushJoins(): Promise<void> {
+  if (joinsHeld() || flushing) return
+  flushing = flushBatch().finally(() => {
+    flushing = null
+  })
+  await flushing
+}
+
+/** Right before the clock: everyone who joined is registered now, every batch, not in 2 s. */
+async function registerEveryoneNow(): Promise<void> {
+  if (flushing) await flushing
+  while (joinQueue.length > 0) {
+    const before = joinQueue.length
+    flushing = flushBatch().finally(() => {
+      flushing = null
+    })
+    await flushing
+    if (joinQueue.length >= before) break // the batch failed: stop rather than spin
+  }
+}
+
+/** Batched so 40 arrivals cost one transaction, not 40. */
+async function flushBatch(): Promise<void> {
   if (joinQueue.length === 0) return
   const batch = joinQueue.slice(0, 40)
   joinQueue = joinQueue.slice(batch.length)
@@ -260,7 +300,11 @@ export async function bet(
   sig: Hex,
 ): Promise<{ ok: true; staked: number; up: number; down: number } | { ok: false; code: string }> {
   if (!round || (round.phase !== 'open' && round.phase !== 'reveal')) return { ok: false, code: 'CLOSED' }
-  if (!players.has(address)) return { ok: false, code: 'UNKNOWN' }
+  const player = players.get(address)
+  if (!player) return { ok: false, code: 'UNKNOWN' }
+  // joined after the clock started: held off chain until the round settles (joinsHeld), so the
+  // contract would skip this bet at the lock while the pools here counted it
+  if (round.phase === 'reveal' && !player.onChain && !knownOnChain.has(address)) return { ok: false, code: 'NEXT_ROUND' }
   if (side !== 0 && side !== 1) return { ok: false, code: 'BAD_SIDE' }
 
   // add-only, but either side is fair game: chips already down cannot move, and the budget is
@@ -359,24 +403,39 @@ async function openRoundOnChain(kind: 0 | 1): Promise<void> {
     txHash: null,
     settleMs: null,
     paid: 0,
+    line: null,
+    endedEarly: false,
   }
   manche += 1
   emit({ type: 'open', roundId: id, kind, manche, manches: MANCHES, durationMs: round.durationMs, openPrice: round.openPrice })
   log.info({ id, kind, openPrice: round.openPrice }, 'round opened')
 }
 
-/** Starts the 45 s clock: bets lock, phones go magenta, and the count starts from zero. */
-export function start(): void {
-  if (!round || round.phase !== 'open') return
-  round.phase = 'live'
-  round.running = true
-  round.lastTick = Date.now()
-  round.elapsedMs = 0
-  round.count = 0
-  round.visible = 0
+/**
+ * Starts the 45 s clock: bets lock, phones go magenta, and the count starts from zero. Everyone who
+ * joined is registered first and later arrivals are held, so the line fixed here is the one the
+ * contract will compute at the lock.
+ */
+export async function start(): Promise<void> {
+  const r = round
+  if (!r || r.phase !== 'open') return
+  await registerEveryoneNow()
+  try {
+    await readOnChainProfits() // the registered count, fresh: the line is computed from it
+  } catch (error: unknown) {
+    log.warn({ err: String(error) }, 'could not re-read the registered count at the start')
+  }
+  if (round !== r || r.phase !== 'open') return // a second start, or the round changed meanwhile
+  r.line = lineFor(registeredOnChain)
+  r.phase = 'live'
+  r.running = true
+  r.lastTick = Date.now()
+  r.elapsedMs = 0
+  r.count = 0
+  r.visible = 0
   cameraSource = null
-  emit({ type: 'start', roundId: round.id, durationMs: round.durationMs, threshold: projectedThreshold(round) })
-  log.info({ id: round.id, bettors: round.stake.size }, 'clock started')
+  emit({ type: 'start', roundId: r.id, durationMs: r.durationMs, threshold: r.line })
+  log.info({ id: r.id, bettors: r.stake.size, line: r.line, registered: registeredOnChain }, 'clock started')
 }
 
 /**
@@ -399,9 +458,15 @@ export function resume(): boolean {
  * ever — not this server's room, which a new game empties while the contract keeps counting. Plus
  * the arrivals still queued for joinBatch whose address the contract does not know yet.
  */
-function projectedThreshold(_r: RoundState): number {
+function projectedThreshold(r: RoundState): number {
+  if (r.line !== null) return r.line // fixed at the start of the clock
   const pending = joinQueue.filter((p) => !knownOnChain.has(p.address)).length
-  return Math.floor(((registeredOnChain + pending) * TICKS * THRESHOLD_PCT) / 100)
+  return lineFor(registeredOnChain + pending)
+}
+
+/** Auramaxx.freeze(): OVER needs strictly more than this, so the screens show it as N.5. */
+function lineFor(registered: number): number {
+  return Math.floor((registered * TICKS * THRESHOLD_PCT) / 100)
 }
 
 /**
@@ -425,12 +490,23 @@ export function setCount(total: number): void {
   if (round) round.count = total
 }
 
-export async function freezeNow(): Promise<void> {
+/** Why the clock stopped: it ran out, the room passed the line, or the régie stopped it. */
+export type FreezeReason = 'clock' | 'line' | 'operator'
+
+export async function freezeNow(reason: FreezeReason = 'operator'): Promise<void> {
   if (!round || round.phase === 'frozen' || round.phase === 'resolved' || round.phase === 'settling') return
   round.phase = 'frozen'
   round.running = false
   round.hidden = false
-  emit({ type: 'freeze', roundId: round.id, poolUp: round.poolUp, poolDown: round.poolDown })
+  emit({
+    type: 'freeze',
+    roundId: round.id,
+    poolUp: round.poolUp,
+    poolDown: round.poolDown,
+    reason,
+    count: round.count,
+    remainingMs: Math.max(0, round.durationMs - round.elapsedMs),
+  })
 
   try {
     if (round.entries.length > 0) {
@@ -504,6 +580,9 @@ export async function settle(): Promise<void> {
       paid: r.paid,
       // nobody bet: the room still sees the count against the line, but nothing was won or lost
       bettors: r.stake.size,
+      // passed the line with time left: the clock stopped there
+      early: r.endedEarly,
+      remainingMs: Math.max(0, r.durationMs - r.elapsedMs),
       txHash: r.txHash,
       settleMs: r.settleMs,
       leaderboard: leaderboard(),
@@ -724,11 +803,18 @@ export function startLoop(): void {
       const first = r.durationMs / 3
       const second = (r.durationMs * 2) / 3
 
-      if (r.revealsDone === 0 && r.elapsedMs >= first) doReveal(r, 1)
+      // the count only ever goes up: once it is past the line OVER is decided, and a reveal or
+      // more seconds would only offer bets on an outcome that is already known
+      if (r.kind === 1 && r.line !== null && r.count > r.line) {
+        r.running = false
+        r.endedEarly = true
+        log.info({ id: r.id, count: r.count, line: r.line, remainingMs: r.durationMs - r.elapsedMs }, 'line passed, ending the round')
+        void endRound('line')
+      } else if (r.revealsDone === 0 && r.elapsedMs >= first) doReveal(r, 1)
       else if (r.revealsDone === 1 && r.elapsedMs >= second) doReveal(r, 2)
       else if (r.elapsedMs >= r.durationMs) {
         r.running = false
-        void endRound()
+        void endRound('clock')
       }
     }
 
@@ -748,8 +834,8 @@ export function startLoop(): void {
 }
 
 /** 45 s are up: lock, commit, and settle without waiting for the régie. */
-async function endRound(): Promise<void> {
-  await freezeNow()
+async function endRound(reason: FreezeReason): Promise<void> {
+  await freezeNow(reason)
   if (round?.phase === 'frozen') await settle() // settle() puts it back to 'frozen' on failure: the régie can retry
 }
 

@@ -11,6 +11,7 @@ import { AVATAR_COUNT, avatarHtml, avatarImg, avatarIndex } from './avatars.js'
 import { encodePacked, keccak256, type Address, type Hex } from 'viem'
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
 import { JOIN_URL, WS_URL, api } from './api.js'
+import { lineText } from './line.js'
 
 const $ = (id: string): HTMLElement => document.getElementById(id)!
 const STORAGE_KEY = 'auramaxx.key'
@@ -101,14 +102,15 @@ function clearLine(): void {
 function showLine(): void {
   const known = line !== null && round !== null
   $('lineBox').hidden = !known
-  $('upCond').textContent = known ? `more than ${line}` : ''
-  $('downCond').textContent = known ? `${line} or fewer` : ''
-  $('magentaLine').textContent = known ? `line ${line}` : 'Line —'
+  const shown = line === null ? '' : lineText(line)
+  $('upCond').textContent = known ? `more than ${shown}` : ''
+  $('downCond').textContent = known ? `less than ${shown}` : ''
+  $('magentaLine').textContent = known ? `line ${shown}` : 'Line —'
   if (!known) return
-  $('lineValue').textContent = String(line)
+  $('lineValue').textContent = shown
   $('lineNote').textContent = lineFixed
-    ? 'Fixed by the contract · every lit screen counts once every 4 s'
-    : 'Every lit screen counts once every 4 s for 45 s · the line grows with each new player until bets lock'
+    ? 'Fixed for this round · every lit screen counts once every 4 s · pass it and OVER wins on the spot'
+    : 'Every lit screen counts once every 4 s for 45 s · the line grows with each new player until the clock starts'
 }
 
 
@@ -505,7 +507,8 @@ function handle(msg: Record<string, unknown>): void {
       break
     }
     case 'start': {
-      setLine(msg.threshold)
+      // the line is fixed from here: later arrivals only count from the next round
+      setLine(msg.threshold, true)
       break
     }
     case 'threshold': {
@@ -543,6 +546,8 @@ function handle(msg: Record<string, unknown>): void {
       showMults(msg)
       setTick('final')
       applyPhase('frozen')
+      // the room passed the line with time left: OVER is decided, and the clock stopped there
+      if (msg.reason === 'line') $('statusText').textContent = 'The room passed the line: OVER wins, settling…'
       break
     }
     case 'bet_ok': {
@@ -562,6 +567,7 @@ function handle(msg: Record<string, unknown>): void {
         BROKE: 'You have already staked everything',
         BAD_SIG: 'Signature refused',
         NOT_JOINED: 'Reconnect to rejoin',
+        NEXT_ROUND: 'You joined during this round: you play from the next one',
       }
       $('statusText').textContent = codes[String(msg.code)] ?? String(msg.code)
       setTick('idle')
@@ -582,7 +588,7 @@ function handle(msg: Record<string, unknown>): void {
       $('resultBig').style.color =
         myStake === 0 ? '#888' : verdict === 'WON' ? 'var(--up)' : verdict === 'SPLIT' ? 'var(--gold)' : 'var(--down)'
       const label = winner === 0 ? 'OVER' : 'UNDER'
-      const outcome = `${label} · ${String(msg.count ?? 0)} light-ups counted, line ${String(msg.threshold ?? 0)} · round ${manche}/2`
+      const outcome = `${label} · ${String(msg.count ?? 0)} light-ups counted, line ${lineText(Number(msg.threshold ?? 0))} · round ${manche}/2`
       // sitting a round out is not losing it: say which of the two it was
       const why = myStake > 0 ? '' : Number(msg.bettors ?? -1) === 0 ? 'Nobody bet this round · ' : 'You sat this round out · '
       $('resultSub').textContent = `${why}${outcome}`
