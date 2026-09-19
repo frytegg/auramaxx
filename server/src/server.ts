@@ -31,7 +31,12 @@ const app = Fastify({ logger: false, trustProxy: true })
 await app.register(websocket)
 await app.register(fastifyStatic, {
   root: path.resolve(here, '../../web/dist'),
-  wildcard: false,
+  // wildcard:false snapshots the directory at boot, so any asset rebuilt afterwards 404s and
+  // the SPA fallback returns index.html with a text/html type — the browser then parses HTML as
+  // a JS module and the whole page silently does nothing. Keep it dynamic.
+  wildcard: true,
+  cacheControl: true,
+  maxAge: 0,
 })
 
 type Socket = { send: (data: string) => void; readyState: number }
@@ -187,8 +192,14 @@ app.post('/op/payout', async (request, reply) => {
 })
 
 app.setNotFoundHandler((request, reply) => {
-  if (request.url.startsWith('/api') || request.url.startsWith('/op')) {
-    return reply.code(404).send({ error: 'not found' })
+  // never answer a missing asset with HTML: a 404 is loud, HTML-as-JavaScript is silent
+  if (
+    request.url.startsWith('/api') ||
+    request.url.startsWith('/op') ||
+    request.url.startsWith('/assets') ||
+    /\.(js|css|map|svg|png|jpg|woff2?)$/.test(request.url)
+  ) {
+    return reply.code(404).send({ error: 'not found', url: request.url })
   }
   return reply.sendFile('index.html')
 })

@@ -20,6 +20,14 @@ const el = {
   hint: document.getElementById('hint') as HTMLElement,
 }
 
+el.device.textContent = 'script loaded, asking for the camera…'
+window.addEventListener('error', (e) => {
+  el.device.textContent = `JS error: ${e.message}`.slice(0, 110)
+})
+window.addEventListener('unhandledrejection', (e) => {
+  el.device.textContent = `promise rejected: ${String(e.reason)}`.slice(0, 110)
+})
+
 const detector = new MagentaDetector()
 let devices: MediaDeviceInfo[] = []
 let deviceIndex = 0
@@ -75,14 +83,26 @@ async function startCamera(index = 0): Promise<void> {
       stream = await navigator.mediaDevices.getUserMedia(constraints)
       video.srcObject = stream
       videoDead = false
-      await video.play()
+      // play() can reject with AbortError when the source changes quickly. That is not a reason
+      // to abandon a stream that is actually fine: the frames still arrive.
+      try {
+        await video.play()
+      } catch (playError: unknown) {
+        console.warn('video.play() rejected, keeping the stream anyway', playError)
+      }
       const track = stream.getVideoTracks()[0]
       const settings = track?.getSettings()
       el.device.textContent = `${track?.label || devices[deviceIndex]?.label || 'camera'} · ${settings?.width ?? '?'}x${settings?.height ?? '?'} (${devices.length} found${i > 0 ? ', fallback' : ''})`
       return
     } catch (error: unknown) {
+      // release the stream we may have just taken, or the next attempt fights our own handle
+      stream?.getTracks().forEach((t) => t.stop())
+      stream = null
+      video.srcObject = null
       const name = error instanceof Error ? error.name : String(error)
-      el.device.textContent = `camera ${name} — retrying…`
+      const message = error instanceof Error ? error.message : ''
+      console.error('getUserMedia failed', constraints, error)
+      el.device.textContent = `camera ${name}: ${message}`.slice(0, 110)
       if (name === 'NotReadableError') {
         el.hint.textContent =
           'NotReadableError: another page or app is holding the camera. Close the other calibrate ' +
@@ -91,7 +111,7 @@ async function startCamera(index = 0): Promise<void> {
       await new Promise((r) => setTimeout(r, 350))
     }
   }
-  el.device.textContent = 'no camera — press C to retry'
+  el.device.textContent = `no camera after 3 attempts · ${devices.length} device(s) listed — press C`
 }
 
 // --- the loop ---------------------------------------------------------------------------
@@ -202,7 +222,9 @@ document.getElementById('reference')!.addEventListener('click', () => actions.r!
 document.getElementById('reset')!.addEventListener('click', () => actions['0']!())
 document.getElementById('kill')!.addEventListener('click', () => actions.v!())
 
-void startCamera(0)
+void startCamera(0).catch((e: unknown) => {
+  el.device.textContent = `startCamera threw: ${String(e)}`.slice(0, 110)
+})
 requestAnimationFrame(draw)
 
 // handy in the console while calibrating

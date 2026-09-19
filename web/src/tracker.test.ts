@@ -83,6 +83,29 @@ check('the cap scales with the number of screens actually in the room', () => {
   assert.equal(t.total, 80, 'the next window allows another 40')
 })
 
+check('hide and re-show slightly off, inside the cooldown, still does not count', () => {
+  const t = new SourceTracker({ ...options })
+  t.ingest([at(100, 50)], 0)
+  // the phone was moving when it vanished, and comes back 25 px away 1.5 s later
+  t.ingest([at(112, 56)], 200)
+  t.ingest([], 400)
+  t.ingest([at(128, 64)], 1900)
+  assert.equal(t.total, 1, 'the same screen, lost and found inside 4 s, is still one point')
+})
+
+check('a jerky movement does not spawn a trail of sources', () => {
+  const t = new SourceTracker({ ...options })
+  let ms = 0
+  const path = [100, 118, 140, 120, 96, 130, 150, 128, 104]
+  for (const x of path) {
+    t.ingest([at(x, 50)], ms)
+    ms += 60
+    t.ingest([], ms) // the screen angles away between waypoints
+    ms += 60
+  }
+  assert.equal(t.total, 1, `one phone waved for ${ms} ms inside one window: got ${t.total}`)
+})
+
 check('two phones side by side are two sources', () => {
   const t = new SourceTracker({ ...options })
   t.ingest([at(100, 50), at(130, 50)], 0)

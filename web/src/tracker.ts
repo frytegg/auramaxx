@@ -33,6 +33,11 @@ type Source = {
 const SOURCE_TTL_MS = 10_000
 /** How far a source may be predicted to have travelled while it was hidden, in grid pixels. */
 const MAX_PREDICTED_DRIFT = 45
+/** Velocity is only trustworthy across a few frames; beyond this we assume it stayed put. */
+const MAX_PREDICTION_MS = 250
+/** A spot that counted recently keeps a wider claim, so the same screen cannot score twice
+ *  just because the tracker lost it for a moment. */
+const COOLDOWN_CLAIM = 2.5
 
 export class SourceTracker {
   options: TrackerOptions
@@ -102,11 +107,15 @@ export class SourceTracker {
       for (const source of this.sources) {
         if (matched.has(source)) continue
         const dt = now - source.lastSeenAt
-        // where we think it went while it was out of sight, plus a radius that grows with
-        // that time: a phone swung through the air must match itself, not spawn a trail
-        const px = source.x + source.vx * dt
-        const py = source.y + source.vy * dt
-        const effective = radius + Math.min(dt * 0.08, MAX_PREDICTED_DRIFT)
+        // extrapolate only over a few frames: a 2-second gap with leftover velocity would
+        // predict a position 100 px away and the screen would never match itself
+        const lead = Math.min(dt, MAX_PREDICTION_MS)
+        const px = source.x + source.vx * lead
+        const py = source.y + source.vy * lead
+        // the search radius still grows with the time out of sight
+        const cooling = now < source.cooldownUntil
+        const effective =
+          (cooling ? radius * COOLDOWN_CLAIM : radius) + Math.min(dt * 0.08, MAX_PREDICTED_DRIFT)
         const dx = px - blob.x
         const dy = py - blob.y
         const d2 = dx * dx + dy * dy
