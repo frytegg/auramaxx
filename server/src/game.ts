@@ -241,8 +241,9 @@ export function start(): void {
   log.info({ id: round.id, bettors: round.stake.size }, 'clock started')
 }
 
-function projectedThreshold(r: RoundState): number {
-  return Math.floor((r.stake.size * TICKS * THRESHOLD_PCT) / 100)
+/** Same formula as Auramaxx.freeze(): registered players, not bettors, since the contract change. */
+function projectedThreshold(_r: RoundState): number {
+  return Math.floor((players.size * TICKS * THRESHOLD_PCT) / 100)
 }
 
 /** The camera page pushes this; it is also what settles a magenta round. */
