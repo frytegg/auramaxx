@@ -1,0 +1,121 @@
+\documentclass[11pt]{article}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage[T1]{fontenc}
+\usepackage{parskip}
+\usepackage{xcolor}
+\usepackage{hyperref}
+
+\title{\textbf{PARI --- Formules de pricing et de paiement}}
+\author{Monad Blitz Paris --- 19 septembre 2026}
+\date{}
+
+\newcommand{\up}{\text{up}}
+\newcommand{\down}{\text{down}}
+
+\begin{document}
+\maketitle
+\vspace{-1.5em}
+\noindent\textit{Référence formules pour l'implémentation. Modèle final : mise libre par joueur, issue de la manche décidée par le nombre de têtes, paiement décidé par l'argent. Round unique, 30 secondes, 2 reveals (10s / 20s), freeze à 30s.}
+
+\section{Notation}
+
+\begin{center}
+\begin{tabular}{@{}>{$}l<{$} p{11cm}@{}}
+\toprule
+N & Nombre de joueurs ayant effectivement misé sur le round \\
+s_i & Mise du joueur $i$, libre, $s_i \geq 1$ jeton (entier) \\
+c_i & Camp choisi par le joueur $i$ au freeze, $c_i \in \{\up, \down\}$ \\
+n_\up,\ n_\down & Nombre de joueurs sur chaque camp au freeze ($n_\up + n_\down = N$) \\
+P_\up,\ P_\down & Somme des mises de chaque camp : $P_\up = \sum_{i:\,c_i=\up} s_i$ \\
+T & Cagnotte totale : $T = P_\up + P_\down$ \\
+\theta & Seuil de majorité pour que up gagne (paramètre, ex. $\theta = 0{,}50$ ou $0{,}60$) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Issue de la manche (basée sur les têtes)}
+
+Le camp gagnant $w$ est décidé par le \emph{nombre de joueurs}, pas par l'argent misé :
+
+\[
+w = \begin{cases}
+\up & \text{si } \dfrac{n_\up}{N} > \theta \\[2mm]
+\down & \text{sinon (égalité incluse)}
+\end{cases}
+\]
+
+\textbf{Forme entière pour Solidity} (jamais de division flottante) :
+
+\[
+w = \up \iff n_\up \cdot 10000 > \theta_{bps} \cdot N
+\]
+
+où $\theta_{bps} = \theta \times 10000$ (ex. $5000$ pour $\theta=50\%$, $6000$ pour $\theta=60\%$). L'égalité stricte va à \down{} par convention (à fixer explicitement dans le contrat, sinon comportement indéfini sur un cas limite réel).
+
+\section{Cotes affichées aux reveals (basées sur l'argent)}
+
+Multiplicateur de gain par camp, affiché en gros au reveal (pas le \% de têtes) :
+
+\[
+\text{mult}_\up = \frac{T}{P_\up} \qquad \text{mult}_\down = \frac{T}{P_\down}
+\]
+
+\textbf{Forme entière (affichage $\times 100$, 2 décimales)} :
+
+\[
+\text{mult\_x100}_i = \left\lfloor \frac{100 \cdot T}{P_i} \right\rfloor
+\]
+
+\textbf{Avant la première mise réelle} ($T=0$), cote non définie $\Rightarrow$ seed virtuel \emph{purement cosmétique}, jamais écrit en storage :
+
+\[
+\text{display\_mult}_i = \frac{T + k}{P_i + 1} \qquad (k = \text{nombre d'issues} = 2)
+\]
+
+\section{Paiement (résolution, basée sur l'argent)}
+
+Pour chaque joueur $i$ du camp gagnant $w$ :
+
+\[
+\text{payout}_i = \left\lfloor \frac{s_i \cdot T}{P_w} \right\rfloor
+\]
+
+\textbf{Ordre des opérations : multiplier avant de diviser}, toujours. Diviser d'abord tronque à zéro dès que $s_i < P_w$.
+
+\textbf{Typage (Solidity)} : calculer en \texttt{uint256} explicite même si $s_i$, $T$, $P_w$ sont stockés en \texttt{uint128} :
+\[
+\texttt{uint256(s\_i)} \times \texttt{uint256(T)} \;/\; \texttt{uint256(P\_w)}
+\]
+
+\subsection*{Cas limite : pool gagnant vide}
+
+Si $P_w = 0$ (personne n'a misé sur le camp qui l'emporte par les têtes) :
+
+\[
+\text{payout}_i = s_i \quad \forall i \quad \text{(remboursement intégral, aucune redistribution possible)}
+\]
+
+Branche explicite obligatoire avant le calcul générique (la division par zéro reverterait sinon).
+
+\section{Invariant de poussière (rounding dust)}
+
+\[
+D = T - \sum_{i \,:\, c_i = w} \text{payout}_i \qquad \text{avec toujours } D \geq 0
+\]
+
+Chaque \texttt{payout}$_i$ étant arrondi vers le bas, $D$ est strictement borné par le nombre de gagnants : $0 \leq D < |\{i : c_i = w\}|$. $D$ alimente la réserve de recharge/bonus (\texttt{faucetReserve}) plutôt que de rester inutilisée.
+
+\section{Récapitulatif des invariants à tester}
+
+\begin{itemize}
+\item $\sum_i \text{payout}_i \leq T$ (jamais $>$, égalité seulement si $D=0$)
+\item $n_\up + n_\down = N$ à tout instant post-freeze
+\item $P_\up + P_\down = T$ à tout instant
+\item Le calcul de $w$ (têtes) et le calcul des \text{payout}$_i$ (argent) sont deux calculs indépendants, jamais mélangés
+\item $P_w = 0 \Rightarrow$ remboursement intégral, jamais de revert
+\end{itemize}
+
+\end{document}

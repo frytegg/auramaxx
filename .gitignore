@@ -1,0 +1,32 @@
+# Secrets — NEVER commit. The repo is public (Blitz rule 03).
+.env
+.env.*
+!.env.example
+*.key
+keystore/
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+out/
+cache/
+broadcast/
+*.tsbuildinfo
+
+# Foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+
+# Logs & local data
+*.log
+.DS_Store
+.vscode/
+.idea/
+
+# Demo captures (kept locally, never published — we told the room nothing is recorded)
+recordings/
