@@ -6,28 +6,72 @@ import { JOIN_URL, WS_URL, api } from './api.js'
 
 const $ = (id: string): HTMLElement => document.getElementById(id)!
 
-const PHASES: Record<string, string> = {
-  open: 'paris ouverts',
-  live: 'en direct',
-  reveal: 'reveal',
-  frozen: 'fin',
-  settling: 'résolution…',
-  resolved: 'résolu',
-}
-const QUESTION = 'COMBIEN VONT S’ALLUMER ?'
+const QUESTION = 'HOW MANY WILL LIGHT UP?'
+const SHOW = 'SHOW YOUR SCREENS!'
+/** The round's own words for its phases; anything else falls back to phaseLabel(). */
+const PHASES: Record<string, string> = { open: 'Betting', live: 'Live', settling: 'Settling…' }
 
 function setManche(n: number): void {
-  $('manche').textContent = n > 0 ? `MANCHE ${n}/2` : 'MANCHE —/2'
+  $('manche').textContent = n > 0 ? `ROUND ${n}/2` : 'ROUND —/2'
 }
 let seq = -1
 let leaderboardHtml = ''
+
+// --- the three stages: landing page, join QR, live game ----------------------------------
+
+type Stage = 'lobby' | 'join' | 'game'
+
+/**
+ * Starting a game is an operator action, so this page needs the régie key the same way the régie
+ * does: from ?k= in the URL, remembered afterwards. Without it the button still renders, and says
+ * what is missing rather than failing silently.
+ */
+const opKey = new URLSearchParams(location.search).get('k') ?? localStorage.getItem('auramaxx.opkey') ?? ''
+if (opKey) localStorage.setItem('auramaxx.opkey', opKey)
+
+function setStage(stage: Stage): void {
+  $('lobby').classList.toggle('off', stage !== 'lobby')
+  $('join').classList.toggle('off', stage !== 'join')
+}
+
+function note(text: string, error = false): void {
+  $('startNote').textContent = text
+  $('startNote').classList.toggle('err', error)
+}
+
+const startBtn = $('startBtn') as HTMLButtonElement
+
+startBtn.addEventListener('click', () => void startGame())
+
+/** The server opens the lobby; the resulting broadcast is what moves this page on. */
+async function startGame(): Promise<void> {
+  if (!opKey) return note('Operator key missing — open this page with ?k=…', true)
+  startBtn.disabled = true
+  const previous = $('startNote').textContent ?? ''
+  note('Starting…')
+  try {
+    const response = await fetch(api(`/op/game?k=${encodeURIComponent(opKey)}`), { method: 'POST' })
+    if (response.status === 403) return note('Operator key refused', true)
+    if (!response.ok) return note(`Server error ${response.status}`, true)
+    note(previous)
+  } catch (error: unknown) {
+    note(`Could not reach the server: ${String(error)}`, true)
+  } finally {
+    startBtn.disabled = false
+  }
+}
+
+/** Phases arrive lowercase from the server; the screen is projected, so give them a capital. */
+function phaseLabel(phase: string): string {
+  return phase.charAt(0).toUpperCase() + phase.slice(1)
+}
 
 function connect(): void {
   const url = WS_URL
   const socket = new WebSocket(url)
 
   socket.addEventListener('open', () => {
-    $('phase').textContent = 'connected'
+    $('phase').textContent = 'Connected'
   })
 
   socket.addEventListener('message', (event) => {
@@ -41,7 +85,7 @@ function connect(): void {
   })
 
   socket.addEventListener('close', () => {
-    $('phase').textContent = 'reconnecting…'
+    $('phase').textContent = 'Reconnecting…'
     setTimeout(connect, 800 + Math.random() * 600)
   })
   socket.addEventListener('error', () => socket.close())
@@ -50,11 +94,26 @@ function connect(): void {
 function handle(msg: Record<string, unknown>, socket: WebSocket): void {
   switch (msg.type) {
     case 'snapshot': {
-      setManche(Number(msg.manche ?? 0))
+      const manche = Number(msg.manche ?? 0)
+      setManche(manche)
       const round = msg.round as Record<string, unknown> | null
       if (round) applyRound(round)
-      $('players').textContent = String(msg.players ?? 0)
+      setPlayers(Number(msg.players ?? 0))
+      // a reload must land back on the stage the game is actually in, not on the landing page
+      // (betting happens before the clock, so an open round still shows the join QR)
+      setStage(Number(msg.gameId ?? 0) === 0 ? 'lobby' : (manche === 0 && !round) || round?.phase === 'open' ? 'join' : 'game')
       renderLeaderboard(msg.leaderboard as Array<Record<string, unknown>>)
+      break
+    }
+    case 'game': {
+      setManche(0)
+      setPlayers(Number(msg.players ?? 0))
+      $('question').textContent = 'Waiting for the round'
+      $('liveCount').textContent = '—'
+      $('liveThreshold').textContent = '?'
+      $('clock').textContent = '—'
+      setStage('join')
+      hideFlash()
       break
     }
     case 'open': {
@@ -62,30 +121,30 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       $('question').textContent = QUESTION
       $('liveCount').textContent = '—'
       $('liveThreshold').textContent = '?'
-      $('phase').textContent = 'paris ouverts'
-      $('clock').textContent = 'PARIEZ'
+      $('phase').textContent = 'Betting'
+      $('clock').textContent = 'BET'
       setHidden(true)
-      setJoinVisible(true) // betting before the clock: late arrivals can still scan and bet
+      setStage('join') // betting happens before the clock: late arrivals can still scan and bet
       hideFlash()
       break
     }
     case 'start': {
-      $('question').textContent = 'MONTREZ VOS ÉCRANS !'
+      $('question').textContent = SHOW
       $('liveCount').textContent = '0'
       $('liveThreshold').textContent = String(msg.threshold ?? '?')
-      setJoinVisible(false)
+      setStage('game')
       break
     }
     case 'tick': {
       const remaining = Number(msg.remainingMs ?? 0)
       if (msg.phase !== 'open') $('clock').textContent = (remaining / 1000).toFixed(1)
       $('clock').classList.toggle('paused', msg.phase === 'reveal' || msg.phase === 'open')
-      $('phase').textContent = PHASES[String(msg.phase)] ?? String(msg.phase ?? '')
+      $('phase').textContent = PHASES[String(msg.phase)] ?? phaseLabel(String(msg.phase ?? ''))
       if (msg.hidden === false) showPools(msg)
       else setHidden(true)
       if (msg.count !== undefined) $('liveCount').textContent = String(msg.count)
       if (msg.threshold !== undefined && msg.threshold !== null) $('liveThreshold').textContent = String(msg.threshold)
-      if (msg.phase === 'live' || msg.phase === 'reveal') setJoinVisible(false)
+      if (msg.phase === 'live' || msg.phase === 'reveal') setStage('game')
       break
     }
     case 'threshold':
@@ -94,17 +153,17 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
     case 'reveal': {
       setHidden(false)
       showPools(msg)
-      $('phase').textContent = `reveal ${String(msg.n ?? '')} — 5 s pour miser`
-      $('question').textContent = `REVEAL ${String(msg.n ?? '')} — DERNIÈRE CHANCE DE MISER`
+      $('phase').textContent = `Reveal ${String(msg.n ?? '')} — 5 s to bet`
+      $('question').textContent = `REVEAL ${String(msg.n ?? '')} — LAST CHANCE TO BET`
       break
     }
     case 'reveal_end':
-      $('question').textContent = 'MONTREZ VOS ÉCRANS !'
+      $('question').textContent = SHOW
       break
     case 'freeze': {
       setHidden(false)
       showPools(msg)
-      $('phase').textContent = 'frozen'
+      $('phase').textContent = 'Frozen'
       break
     }
     case 'resolved': {
@@ -112,7 +171,7 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       $('flashBig').textContent = winner
       $('flashBig').style.color = winner === 'OVER' ? 'var(--up)' : 'var(--down)'
       $('liveCount').textContent = String(msg.count ?? 0)
-      $('flashSub').textContent = `${String(msg.count ?? 0)} écrans vs seuil ${String(msg.threshold ?? 0)} · ${String(msg.paid ?? 0)} payés en 1 transaction`
+      $('flashSub').textContent = `${String(msg.count ?? 0)} screens vs threshold ${String(msg.threshold ?? 0)} · ${String(msg.paid ?? 0)} paid in one transaction`
       // never render a hash or a settle time that did not happen
       $('flashHash').textContent = msg.txHash ? `${String(msg.txHash)} · ${String(msg.settleMs ?? '?')} ms` : ''
       $('flash').classList.add('on')
@@ -121,7 +180,7 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       break
     }
     case 'joined': {
-      $('players').textContent = String(msg.total ?? 0)
+      setPlayers(Number(msg.total ?? 0))
       break
     }
     case 'gas': {
@@ -129,7 +188,7 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       break
     }
     case 'idle_qr': {
-      setJoinVisible(true)
+      setStage('join')
       break
     }
     case 'payout': {
@@ -150,7 +209,7 @@ function applyRound(round: Record<string, unknown>): void {
   $('question').textContent = QUESTION
   if (round.threshold !== null && round.threshold !== undefined) $('liveThreshold').textContent = String(round.threshold)
   if (round.count !== undefined) $('liveCount').textContent = String(round.count)
-  $('phase').textContent = String(round.phase ?? '')
+  $('phase').textContent = phaseLabel(String(round.phase ?? ''))
   setHidden(round.hidden !== false)
   if (round.hidden === false) showPools(round)
 }
@@ -201,12 +260,14 @@ function hideFlash(): void {
 }
 
 
-// the join QR covers the live count until a round opens, then gets out of the way
+// the join QR covers the live count between "Start a game" and the first round
 const qr = $('qr') as HTMLImageElement
 qr.src = api(`/api/qr.svg?url=${encodeURIComponent(JOIN_URL)}`)
 
-function setJoinVisible(visible: boolean): void {
-  $('join').classList.toggle('off', !visible)
+/** Two places show the count: the header all game long, and the join screen while people arrive. */
+function setPlayers(total: number): void {
+  $('players').textContent = String(total)
+  $('joinPlayers').textContent = String(total)
 }
 
 void fetch(api('/api/config'))

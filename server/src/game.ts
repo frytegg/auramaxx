@@ -69,6 +69,8 @@ type RoundState = {
 export const players = new Map<Address, Player>()
 let round: RoundState | null = null
 let manche = 0
+/** 0 means no game has been started yet: the projector shows its landing page until this moves. */
+let gameId = 0
 let joinQueue: Player[] = []
 const listeners = new Set<(event: unknown) => void>()
 
@@ -79,6 +81,24 @@ export function onBroadcast(fn: (event: unknown) => void): () => void {
 
 function emit(event: Record<string, unknown>): void {
   for (const fn of listeners) fn(event)
+}
+
+// --- the game --------------------------------------------------------------------------
+
+/**
+ * Opens a lobby. Drops any round in progress and puts the manche counter back to zero, which is
+ * what the projector waits on to show the join QR.
+ *
+ * Players are deliberately kept: they are already registered on chain and their profits live in
+ * the contract, so forgetting them here would only make this server disagree with the chain.
+ */
+export function newGame(): { gameId: number; players: number } {
+  round = null
+  manche = 0
+  gameId += 1
+  emit({ type: 'game', gameId, players: players.size })
+  log.info({ gameId, players: players.size }, 'new game')
+  return { gameId, players: players.size }
 }
 
 // --- joining ---------------------------------------------------------------------------
@@ -167,6 +187,9 @@ export async function bet(
 // --- the round machine -------------------------------------------------------------------
 
 export async function openRound(kind: 0 | 1): Promise<void> {
+  // the régie can open a round without anyone having pressed "Start a game" on the projector;
+  // give that path a game too, so both entry points leave the same state behind
+  if (gameId === 0) newGame()
   const id = Number(await publicClient().readContract({ address: contract, abi: AURAMAXX_ABI, functionName: 'roundCount' }))
   // the on-chain deadline for committing bets. Betting now opens BEFORE the clock with no time
   // limit, and 900 blocks (~5 min at ~0.3 s) could expire while the room is still betting, which
@@ -363,6 +386,7 @@ export function snapshot(address?: Address): Record<string, unknown> {
   return {
     type: 'snapshot',
     players: players.size,
+    gameId,
     manche,
     manches: MANCHES,
     round: round

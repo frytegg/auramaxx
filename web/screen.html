@@ -34,12 +34,32 @@
       .live .vs { font-size: 30px; opacity: .75; }
       .live .vs b { font-family: 'Anton', sans-serif; font-weight: 400; font-size: 44px; color: #F8F3F7; }
       .join {
-        position: absolute; inset: 0; display: grid; place-items: center; gap: 18px;
+        position: absolute; inset: 0; display: grid; place-items: center; align-content: center; gap: 18px;
         background: rgba(7,7,13,.93); border-radius: 18px;
       }
       .join.off { display: none; }
       .join img { width: 300px; height: 300px; background: #fff; padding: 12px; border-radius: 14px; }
       .joinText { font-size: 26px; font-weight: 800; letter-spacing: .2em; color: var(--magenta); }
+      .joinCount { font-size: 20px; opacity: .6; }
+
+      /* the landing page: nothing happens, and no QR is shown, until someone starts a game */
+      .lobby {
+        position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; text-align: center;
+        background: radial-gradient(90% 70% at 50% -10%, #2B0F52 0%, #0B0710 65%) fixed, #0B0710;
+      }
+      .lobby.off { display: none; }
+      .lobbyBrand { font-family: 'Anton', sans-serif; font-size: 132px; letter-spacing: 8px; color: var(--magenta); line-height: 1; }
+      .lobbyTag { font-size: 30px; opacity: .75; margin-top: 18px; }
+      .start {
+        margin-top: 52px; padding: 22px 64px; border: 0; border-radius: 999px; cursor: pointer;
+        font-family: 'Anton', sans-serif; font-size: 40px; letter-spacing: 2px; color: #0B0710;
+        background: var(--magenta); box-shadow: 0 0 60px rgba(255,46,158,.45);
+        transition: transform .12s ease, box-shadow .12s ease;
+      }
+      .start:hover { transform: translateY(-2px); box-shadow: 0 0 80px rgba(255,46,158,.65); }
+      .start:disabled { opacity: .45; cursor: default; transform: none; }
+      .lobbyNote { margin-top: 26px; font-size: 20px; opacity: .55; }
+      .lobbyNote.err { color: var(--down); opacity: 1; }
 
       .side { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
       .pools { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -73,24 +93,25 @@
     <div class="screen">
       <header>
         <div class="brand">AURAMAXX</div>
-        <div class="players"><span id="players">0</span> playing · <span id="phase">idle</span></div>
+        <div class="players"><span id="players">0</span> playing · <span id="phase">Connecting…</span></div>
       </header>
 
       <div class="main">
         <div class="chart-wrap">
         <div class="live">
-          <div class="manche" id="manche">MANCHE —/2</div>
+          <div class="manche" id="manche">ROUND —/2</div>
           <div class="count" id="liveCount">—</div>
-          <div class="vs">écrans allumés · seuil <b id="liveThreshold">?</b></div>
+          <div class="vs">Screens lit · threshold <b id="liveThreshold">?</b></div>
         </div>
-        <div class="join" id="join">
-          <img id="qr" alt="scan to play" />
-          <div class="joinText">SCANNE POUR JOUER</div>
+        <div class="join off" id="join">
+          <img id="qr" alt="Scan to play" />
+          <div class="joinText">SCAN TO PLAY</div>
+          <div class="joinCount"><span id="joinPlayers">0</span> players joined</div>
         </div>
       </div>
         <div class="side">
           <div class="clock" id="clock">—</div>
-          <div class="question" id="question">en attente de la manche</div>
+          <div class="question" id="question">Waiting for the round</div>
           <div class="pools" id="pools" style="display:none">
             <div class="pool up">
               <div class="label">OVER</div>
@@ -103,7 +124,7 @@
               <div class="sub"><span id="poolDown">0</span> AURA</div>
             </div>
           </div>
-          <div class="hidden-note" id="hiddenNote">bets are hidden until the reveal</div>
+          <div class="hidden-note" id="hiddenNote">Bets are hidden until the reveal</div>
           <div class="board">
             <h2>AURA FARMED</h2>
             <div id="leaderboard"></div>
@@ -115,6 +136,15 @@
         <div id="contract">—</div>
         <div id="gas">—</div>
       </footer>
+    </div>
+
+    <div class="lobby" id="lobby">
+      <div>
+        <div class="lobbyBrand">AURAMAXX</div>
+        <div class="lobbyTag">Bet on the room. The camera settles it.</div>
+        <button class="start" id="startBtn">Start a game</button>
+        <div class="lobbyNote" id="startNote">Two rounds · 1000 AURA each · Winners are paid in MON</div>
+      </div>
     </div>
 
     <div class="flash" id="flash">
