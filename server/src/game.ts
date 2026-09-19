@@ -102,6 +102,24 @@ export function newGame(): { gameId: number; players: number } {
   return { gameId, players: players.size }
 }
 
+/**
+ * Back to the landing page. `gameId` going to 0 is what the projector waits on, and nothing else
+ * sets it back — without this a server restart was the only way to see the landing page again,
+ * which is unusable for rehearsing.
+ *
+ * Players and their on-chain profits are kept, for the same reason newGame keeps them: the
+ * contract still holds them, so dropping them here would only make this server tell a different
+ * story from the chain.
+ */
+export function resetGame(): { gameId: number } {
+  round = null
+  manche = 0
+  gameId = 0
+  emit({ type: 'game', gameId, players: players.size })
+  log.info('reset to the landing page')
+  return { gameId }
+}
+
 // --- joining ---------------------------------------------------------------------------
 
 export function join(address: Address, name: string, avatar: number): Player {

@@ -34,7 +34,19 @@ if (opKey) localStorage.setItem('auramaxx.opkey', opKey)
 // landing page and gives the CPU back the moment a game starts
 const mascot = mountMascot($('mascot'))
 
+/**
+ * The page has to render something before the first snapshot arrives, and whatever it picks is a
+ * guess. Rather than flash the wrong stage, the lobby stays veiled until the server says where we
+ * are — with a timeout, because a veil that never lifts if the socket is down is worse than a
+ * flash. Render's free tier can take half a minute to wake up.
+ */
+function unveil(): void {
+  $('lobby').classList.remove('booting')
+}
+setTimeout(unveil, 2500)
+
 function setStage(stage: Stage): void {
+  unveil()
   $('lobby').classList.toggle('off', stage !== 'lobby')
   $('join').classList.toggle('off', stage !== 'join')
   if (stage === 'lobby') mascot.start()
@@ -121,7 +133,8 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       $('liveCount').textContent = '—'
       $('liveThreshold').textContent = '?'
       $('clock').textContent = '—'
-      setStage('join')
+      // gameId 0 is the régie sending everyone back to the landing page
+      setStage(Number(msg.gameId ?? 1) === 0 ? 'lobby' : 'join')
       hideFlash()
       break
     }

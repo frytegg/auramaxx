@@ -64,6 +64,8 @@ function refreshButtons(): void {
     freeze: phase === 'live' || phase === 'reveal',
     settle: phase === 'frozen',
     payout: phase === 'resolved',
+    // always available: it is the way out of a half-finished rehearsal
+    reset: true,
   }
   // after manche 1 the next step is manche 2; the MON payout only comes once both are played
   const next =

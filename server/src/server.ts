@@ -16,6 +16,7 @@ import {
   join,
   leaderboard,
   newGame,
+  resetGame,
   onBroadcast,
   openRound,
   payout,
@@ -185,6 +186,12 @@ function guard(request: { query: unknown }): boolean {
 app.post('/op/game', async (request, reply) => {
   if (!guard(request)) return reply.code(403).send({ error: 'nope' })
   return { ok: true, ...newGame() }
+})
+
+/** Back to the landing page, so the whole thing can be rehearsed without restarting. */
+app.post('/op/reset', async (request, reply) => {
+  if (!guard(request)) return reply.code(403).send({ error: 'nope' })
+  return { ok: true, ...resetGame() }
 })
 
 app.post('/op/open', async (request, reply) => {

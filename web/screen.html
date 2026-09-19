@@ -49,6 +49,7 @@
         background: radial-gradient(90% 70% at 50% -10%, #2B0F52 0%, #0B0710 65%) fixed, #0B0710;
       }
       .lobby.off { display: none; }
+      .lobby.booting > * { visibility: hidden; }
       .lobbyTop { position: absolute; top: 11vh; left: 0; right: 0; z-index: 2; }
       .lobbyMid { position: absolute; top: 50%; left: 0; right: 0; transform: translateY(-50%); z-index: 2; }
       .lobbyBot { position: absolute; bottom: 9vh; left: 0; right: 0; z-index: 2; }
@@ -150,7 +151,7 @@
       </footer>
     </div>
 
-    <div class="lobby" id="lobby">
+    <div class="lobby booting" id="lobby">
       <div class="mascot" id="mascot"></div>
       <div class="lobbyTop">
         <div class="lobbyBrand">AURAMAXX</div>
