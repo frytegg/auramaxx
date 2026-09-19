@@ -246,4 +246,53 @@ contract AuramaxxTest is Test {
         (,,, uint96[] memory ps) = a.getPlayers(0, 3);
         assertEq(ps[0], 0, "alice was the whole book: refunded, not enriched");
     }
+
+    /// 9. A light-up round as the room plays it: alice backs OVER before the clock, then switches to
+    ///    UNDER at a reveal's pause (a later entry, a higher nonce, committed in the same batch).
+    ///    UNDER wins. Her UNDER leg pays, her OVER leg is lost, and the score takes the net.
+    ///  OVER: alice 300 + bob 400 = 700. UNDER: alice 200 + carol 100 = 300. T = 1000, count 10 < 14.
+    ///  alice 200*1000/300 = 666 against 500 committed -> +166 goes to her score
+    ///  carol 100*1000/300 = 333 against 100 committed -> +233
+    function test_over_then_under_at_the_pause_scores_the_net_gain() public {
+        uint256 id = a.openRound(1, uint64(block.number + 100));
+        Auramaxx.Entry[] memory es = new Auramaxx.Entry[](4);
+        es[0] = _entry(PK1, p1, id, 0, 300, 1); // before the clock: OVER
+        es[1] = _entry(PK2, p2, id, 0, 400, 1);
+        es[2] = _entry(PK1, p1, id, 1, 200, 2); // at the pause: UNDER
+        es[3] = _entry(PK3, p3, id, 1, 100, 1);
+        a.commitBatch(id, es);
+        a.freeze(id);
+        (Auramaxx.Round memory r,) = a.getRound(id);
+        assertEq(uint256(r.threshold), 14, "3 registered players: the line is 14, shown as 14.5");
+        a.resolveByCount(id, 10); // 10 is not more than 14: UNDER
+
+        (,,, uint96[] memory ps) = a.getPlayers(0, 3);
+        assertEq(ps[0], 166, "alice: 666 back on 500 in, the net gain is her score");
+        assertEq(ps[1], 0, "bob backed OVER only");
+        assertEq(ps[2], 233, "carol: 333 back on 100 in");
+        assertEq(a.faucetReserve(), 1, "666 + 333 = 999 paid out of 1000: one chip of dust");
+    }
+
+    /// 9bis. The same switch, lopsided the other way: the winning leg pays less than she put in
+    ///    across both. The score only ever counts profit, so it stays where it was — it never goes
+    ///    down, and it never pretends she won.
+    ///  OVER: alice 500 + carol 100 = 600. UNDER: alice 100 + bob 300 = 400. T = 1000, UNDER wins.
+    ///  alice 100*1000/400 = 250 against 600 committed -> a net loss of 350, score unchanged
+    ///  bob   300*1000/400 = 750 against 300 committed -> +450
+    function test_a_losing_switch_leaves_the_score_where_it_was() public {
+        uint256 id = a.openRound(1, uint64(block.number + 100));
+        Auramaxx.Entry[] memory es = new Auramaxx.Entry[](4);
+        es[0] = _entry(PK1, p1, id, 0, 500, 1);
+        es[1] = _entry(PK3, p3, id, 0, 100, 1);
+        es[2] = _entry(PK1, p1, id, 1, 100, 2);
+        es[3] = _entry(PK2, p2, id, 1, 300, 1);
+        a.commitBatch(id, es);
+        a.freeze(id);
+        a.resolveByCount(id, 0); // UNDER
+
+        (,,, uint96[] memory ps) = a.getPlayers(0, 3);
+        assertEq(ps[0], 0, "alice lost 350 net: no profit, and the score does not go below where it was");
+        assertEq(ps[1], 450, "bob: 750 back on 300 in");
+        assertEq(ps[2], 0, "carol backed OVER only");
+    }
 }
