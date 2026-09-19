@@ -69,9 +69,46 @@ let registeredOn: WebSocket | null = null
 /** The name field holds a saved name we put there, not one typed since. */
 let namePrefilled = false
 const QUESTION = 'HOW MANY WILL LIGHT UP?'
+/** The number OVER and UNDER are about. Projected by the server until the lock, then the contract's. */
+let line: number | null = null
+let lineFixed = false
 
 function setQuestion(): void {
   $('q').textContent = manche > 0 ? `ROUND ${manche}/2 · ${QUESTION}` : QUESTION
+}
+
+/** Any message that carries the line updates it; `fixed` once the contract has computed it. */
+function setLine(value: unknown, fixed = false): void {
+  if (value === null || value === undefined) return
+  const n = Number(value)
+  if (!Number.isFinite(n)) return
+  line = n
+  if (fixed) lineFixed = true
+  showLine()
+}
+
+function clearLine(): void {
+  line = null
+  lineFixed = false
+  showLine()
+}
+
+/**
+ * OVER and UNDER mean nothing without the number they are about, so it sits under the question and
+ * on both buttons. Until the lock it is the server's projection, which grows with every player who
+ * joins; the contract fixes it when bets lock, and says so.
+ */
+function showLine(): void {
+  const known = line !== null && round !== null
+  $('lineBox').hidden = !known
+  $('upCond').textContent = known ? `more than ${line}` : ''
+  $('downCond').textContent = known ? `${line} or fewer` : ''
+  $('magentaLine').textContent = known ? `line ${line}` : 'Line —'
+  if (!known) return
+  $('lineValue').textContent = String(line)
+  $('lineNote').textContent = lineFixed
+    ? 'Fixed by the contract · every lit screen counts once every 4 s'
+    : 'Every lit screen counts once every 4 s for 45 s · the line grows with each new player until bets lock'
 }
 
 
@@ -180,6 +217,7 @@ function backToJoin(): void {
   setTick('idle')
   setQuestion()
   setHidden(true)
+  clearLine()
   nameInput.value = ''
   namePrefilled = false
   updateStatus()
@@ -417,7 +455,13 @@ function handle(msg: Record<string, unknown>): void {
         $('meName').textContent = String(you.name ?? '')
         $('meAvatar').replaceChildren(avatarImg(Number(you.avatar ?? 0)))
       }
-      applyRound(msg.round as Record<string, unknown> | null)
+      const snapRound = msg.round as Record<string, unknown> | null
+      applyRound(snapRound)
+      if (snapRound) {
+        // the snapshot does not say whether the line is final: the contract sets it at the lock
+        lineFixed = ['frozen', 'settling', 'resolved'].includes(String(snapRound.phase))
+        setLine(snapRound.threshold)
+      } else clearLine()
       updateStatus()
       break
     }
@@ -449,22 +493,33 @@ function handle(msg: Record<string, unknown>): void {
       setQuestion()
       setHidden(true)
       setTick('idle')
+      // a new round has a new line: the first tick, a tenth of a second away, brings it
+      clearLine()
       // a phone still on the join screen stays there: the round must not skip onboarding
       applyPhase('open')
       updateStatus()
+      break
+    }
+    case 'start': {
+      setLine(msg.threshold)
+      break
+    }
+    case 'threshold': {
+      // bets are locked: the contract has computed the line from its registered players
+      setLine(msg.threshold, true)
       break
     }
     case 'tick': {
       if (round) round.phase = String(msg.phase ?? round.phase)
       const remaining = Number(msg.remainingMs ?? 0)
       const betting = msg.phase === 'open'
-      $('clock').textContent = betting ? 'PARIS OUVERTS' : `${(remaining / 1000).toFixed(1)}s`
+      $('clock').textContent = betting ? 'BETS OPEN' : `${(remaining / 1000).toFixed(1)}s`
       $('clock').classList.toggle('paused', betting || msg.phase === 'reveal')
       $('magentaClock').textContent = `${Math.ceil(remaining / 1000)}s`
       if (msg.hidden === false) showMults(msg)
       else setHidden(true)
       if (msg.count !== undefined) $('magentaCount').textContent = String(msg.count)
-      if (msg.threshold !== undefined) $('magentaLine').textContent = `seuil ${String(msg.threshold)}`
+      setLine(msg.threshold)
       applyPhase(String(msg.phase ?? ''))
       updateStatus()
       break
@@ -507,6 +562,7 @@ function handle(msg: Record<string, unknown>): void {
     case 'resolved': {
       leaveMagenta()
       shownPhase = 'resolved'
+      setLine(msg.threshold, true)
       const winner = Number(msg.winner) as 0 | 1
       const onWinner = winner === 0 ? myUp : myDown
       const onLoser = winner === 0 ? myDown : myUp
@@ -518,7 +574,7 @@ function handle(msg: Record<string, unknown>): void {
       $('resultBig').style.color =
         myStake === 0 ? '#888' : verdict === 'WON' ? 'var(--up)' : verdict === 'SPLIT' ? 'var(--gold)' : 'var(--down)'
       const label = winner === 0 ? 'OVER' : 'UNDER'
-      $('resultSub').textContent = `${label} · ${String(msg.count ?? 0)} screens counted, threshold ${String(msg.threshold ?? 0)} · round ${manche}/2`
+      $('resultSub').textContent = `${label} · ${String(msg.count ?? 0)} light-ups counted, line ${String(msg.threshold ?? 0)} · round ${manche}/2`
       // 'resolved' is a broadcast with no per-player field: read this phone's score off the board
       const board = msg.leaderboard as Array<Record<string, unknown>> | undefined
       const mine = board?.find((row) => String(row.address ?? '').toLowerCase() === account.address.toLowerCase())

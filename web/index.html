@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
@@ -66,6 +66,12 @@
       }
       .side .name { font-family: 'Anton', sans-serif; font-size: 30px; letter-spacing: .06em; }
       .side .mult { font-size: 14px; color: var(--text-dim); margin-top: 4px; font-variant-numeric: tabular-nums; }
+      .side .cond { font-size: 15px; font-weight: 700; color: var(--text); margin-top: 2px; min-height: 19px; font-variant-numeric: tabular-nums; }
+      .line { text-align: center; padding: 12px 14px; border-radius: 16px; background: var(--surface); border: 1px solid var(--border); }
+      .line[hidden] { display: none; }
+      .line .lineTop { font-family: 'Anton', sans-serif; font-size: 24px; letter-spacing: .06em; color: var(--text-dim); }
+      .line .lineTop b { font-weight: 400; font-size: 40px; color: var(--magenta); vertical-align: -4px; margin: 0 6px; font-variant-numeric: tabular-nums; }
+      .line .lineNote { font-size: 13px; color: var(--text-faint); margin-top: 4px; line-height: 1.4; }
       .side.up .name { color: var(--up); }
       .side.down .name { color: var(--down); }
       .side.up.sel { border-color: var(--up); background: rgba(53,226,140,.12); box-shadow: 0 0 30px rgba(53,226,140,.35); }
@@ -137,10 +143,15 @@
         <div class="chip"><span class="aura" id="meAura">1000</span> AURA</div>
       </div>
       <div class="question" id="q">Waiting for the round…</div>
+      <!-- the number OVER and UNDER are about: without it the two buttons mean nothing -->
+      <div class="line" id="lineBox" hidden>
+        <div class="lineTop">LINE <b id="lineValue">—</b> LIGHT-UPS</div>
+        <div class="lineNote" id="lineNote"></div>
+      </div>
       <div class="clock" id="clock">—</div>
       <div class="sides">
-        <div class="side up" id="sideUp"><div class="name" id="upName">OVER</div><div class="mult" id="upMult">—</div><div class="mine" id="upMine"></div></div>
-        <div class="side down" id="sideDown"><div class="name" id="downName">UNDER</div><div class="mult" id="downMult">—</div><div class="mine" id="downMine"></div></div>
+        <div class="side up" id="sideUp"><div class="name" id="upName">OVER</div><div class="cond" id="upCond"></div><div class="mult" id="upMult">—</div><div class="mine" id="upMine"></div></div>
+        <div class="side down" id="sideDown"><div class="name" id="downName">UNDER</div><div class="cond" id="downCond"></div><div class="mult" id="downMult">—</div><div class="mine" id="downMine"></div></div>
       </div>
       <div class="stakes">
         <button data-stake="100">100</button>
@@ -165,7 +176,7 @@
       <div class="hint" id="magentaClock" style="font-size:44px">45s</div>
       <div class="hint" id="magentaHint">SHOW YOUR SCREEN<br />TO THE CAMERA</div>
       <div class="count" id="magentaCount">—</div>
-      <div class="hint" id="magentaLine" style="font-size:20px">Threshold —</div>
+      <div class="hint" id="magentaLine" style="font-size:20px">Line —</div>
       <div class="hint" style="font-size:15px">Brightness all the way up</div>
     </section>
 
