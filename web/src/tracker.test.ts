@@ -166,7 +166,7 @@ check('the operator can override the count', () => {
 check('BUG 1: a screen split by a finger counts once, not twice', () => {
   const t = new SourceTracker({ ...options })
   const fragments = [box(100, 40, 112, 70), box(116, 40, 124, 70)] // one phone, mask in two pieces
-  const screens = mergeBlobs(fragments, 12)
+  const screens = mergeBlobs(fragments, 0.6)
   assert.equal(screens.length, 1, 'the two fragments are one screen')
   t.ingest(screens, 0)
   assert.equal(t.total, 1)
@@ -179,26 +179,29 @@ check('BUG 1: fragments that come and go while moving still count once', () => {
     const x = 100 + step * 3
     // the split pattern changes every frame, as it does in the real mask
     const raw = step % 2 === 0 ? [box(x, 40, x + 12, 70), box(x + 16, 40, x + 24, 70)] : [box(x, 40, x + 24, 70)]
-    t.ingest(mergeBlobs(raw, 12), ms)
+    t.ingest(mergeBlobs(raw, 0.6), ms)
     ms += 60
   }
   assert.equal(t.total, 1, `a single moving screen: got ${t.total}`)
 })
 
-check('BUG 2: a fragment beside a just-counted screen cannot score', () => {
+check('BUG 2: a big screen split by a hand is merged, not double counted', () => {
   const t = new SourceTracker({ ...options })
-  t.ingest([at(100, 50)], 0)
-  t.ingest([at(100, 50), at(108, 50)], 60) // a second piece appears beside it, unmerged
-  assert.equal(t.total, 1, 'the proximity guard holds even when merging misses')
+  // close up: a 40 px screen with a 14 px hole where a hand crosses it
+  const raw = [box(100, 40, 126, 90), box(140, 40, 152, 90)]
+  const screens = mergeBlobs(raw, 0.6)
+  assert.equal(screens.length, 1, 'a hole smaller than the screen is still one screen')
+  t.ingest(screens, 0)
+  assert.equal(t.total, 1)
 })
 
 check('BUG 2: hide and re-show within the cooldown, fragmented, does not count', () => {
   const t = new SourceTracker({ ...options })
-  t.ingest(mergeBlobs([box(100, 40, 124, 70)], 12), 0)
+  t.ingest(mergeBlobs([box(100, 40, 124, 70)], 0.6), 0)
   assert.equal(t.total, 1)
   t.ingest([], 500)
   t.ingest([], 1500)
-  t.ingest(mergeBlobs([box(104, 42, 116, 72), box(120, 42, 128, 72)], 12), 2500)
+  t.ingest(mergeBlobs([box(104, 42, 116, 72), box(120, 42, 128, 72)], 0.6), 2500)
   assert.equal(t.total, 1, `still one point: got ${t.total}`)
 })
 
@@ -212,8 +215,26 @@ check('a one-frame flicker is not a new show', () => {
   assert.equal(t.total, 1, `a phone held up through flicker scores once: got ${t.total}`)
 })
 
+check('BENCH: two small distant screens 8 px apart both count', () => {
+  const t = new SourceTracker({ ...options }) // radius 10, bigger than the gap on purpose
+  // exactly the bench failure: 3 px wide screens, raised one second apart, 8 px between them
+  t.ingest([box(200, 100, 203, 103)], 0)
+  assert.equal(t.total, 1)
+  t.ingest([box(200, 100, 203, 103), box(211, 100, 214, 103)], 1000)
+  assert.equal(t.total, 2, `the second phone must count: got ${t.total}`)
+})
+
+check('BENCH: a fragment of one small screen still does not double count', () => {
+  const t = new SourceTracker({ ...options })
+  t.ingest([box(200, 100, 203, 103)], 0)
+  // a 1 px sliver right against it is part of the same screen, not a neighbour
+  const screens = mergeBlobs([box(200, 100, 203, 103), box(204, 100, 205, 102)], 0.6)
+  t.ingest(screens, 60)
+  assert.equal(t.total, 1, `a touching sliver is the same screen: got ${t.total}`)
+})
+
 check('two genuinely distinct screens are never merged', () => {
-  const far = mergeBlobs([box(40, 40, 60, 70), box(200, 40, 220, 70)], 12)
+  const far = mergeBlobs([box(40, 40, 60, 70), box(200, 40, 220, 70)], 0.6)
   assert.equal(far.length, 2, 'two people apart in the room must stay two screens')
 })
 

@@ -18,8 +18,8 @@ export const GRID_W = 320
 export const GRID_H = 180
 
 export type Options = {
-  /** max gap, in grid pixels, between two fragments of the same screen */
-  mergeGap: number
+  /** fragments merge when their gap is under this FRACTION of the smaller screen's size */
+  mergeRatio: number
   /** min(R,B) - G above this SEEDS a screen. Magenta ~229, white 0, skin ~-67, exit sign ~-200 */
   threshold: number
   /**
@@ -41,8 +41,8 @@ export type Options = {
 }
 
 export const DEFAULTS: Options = {
-  /** fragments of one screen closer than this are merged before tracking */
-  mergeGap: 12,
+  /** 0.6 of a screen's own size: splits a hand makes are merged, neighbours are not */
+  mergeRatio: 0.6,
   threshold: 60,
   weakRatio: 0.55,
   minArea: 6,
@@ -160,7 +160,7 @@ export class MagentaDetector {
     this.tracker.options.mode = this.options.mode
 
     // one screen often arrives as several fragments: merge before tracking
-    const screens = mergeBlobs(blobs, this.options.mergeGap)
+    const screens = mergeBlobs(blobs, this.options.mergeRatio)
     result.screens = screens.length
     result.tickJustFired = this.tracker.ingest(screens, now)
     result.visible = screens.length

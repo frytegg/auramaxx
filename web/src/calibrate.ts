@@ -49,7 +49,7 @@ function slider(id: string, key: keyof Options, label: string, format = (v: numb
 slider('threshold', 'threshold', 'vThreshold')
 slider('minArea', 'minArea', 'vMinArea')
 slider('weakRatio', 'weakRatio', 'vWeak', (v) => v.toFixed(2))
-slider('mergeGap', 'mergeGap', 'vMergeGap')
+slider('mergeGap', 'mergeRatio', 'vMergeGap', (v) => v.toFixed(2))
 slider('radius', 'radius', 'vRadius')
 slider('cooldown', 'cooldownMs', 'vCooldown')
 

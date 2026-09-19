@@ -12,10 +12,15 @@ export type TrackedBlob = { x: number; y: number; minX?: number; minY?: number; 
 
 /**
  * A phone screen rarely arrives as one clean blob: a finger across it, a reflection or a viewing
- * angle splits it into fragments. Merge fragments that are close together into one screen before
- * tracking, otherwise each fragment becomes its own source and scores its own point.
+ * angle splits it into fragments. Merge fragments into one screen before tracking, otherwise each
+ * fragment becomes its own source and scores its own point.
+ *
+ * The distance that counts as "same screen" is RELATIVE to the screens involved, never a fixed
+ * number of pixels. Close up, a 40 px screen can be split by a hand with a 15 px hole in it. At
+ * the back of the room, two different phones are 3 px wide and 8 px apart — a fixed 12 px rule
+ * merged those two into one and the second phone silently stopped counting.
  */
-export function mergeBlobs(blobs: readonly TrackedBlob[], gap: number): TrackedBlob[] {
+export function mergeBlobs(blobs: readonly TrackedBlob[], ratio: number, minGap = 2): TrackedBlob[] {
   const boxes = blobs.map((b) => ({
     minX: b.minX ?? b.x,
     minY: b.minY ?? b.y,
@@ -33,8 +38,14 @@ export function mergeBlobs(blobs: readonly TrackedBlob[], gap: number): TrackedB
       for (let j = i + 1; j < boxes.length; j++) {
         const a = boxes[i]!
         const b = boxes[j]!
+        const spanA = Math.max(a.maxX - a.minX, a.maxY - a.minY, 1)
+        const spanB = Math.max(b.maxX - b.minX, b.maxY - b.minY, 1)
+        const allowed = Math.max(minGap, ratio * Math.min(spanA, spanB))
         const apart =
-          a.minX - b.maxX > gap || b.minX - a.maxX > gap || a.minY - b.maxY > gap || b.minY - a.maxY > gap
+          a.minX - b.maxX > allowed ||
+          b.minX - a.maxX > allowed ||
+          a.minY - b.maxY > allowed ||
+          b.minY - a.maxY > allowed
         if (apart) continue
         const n = a.n + b.n
         boxes[i] = {
@@ -86,9 +97,16 @@ const MAX_PREDICTION_MS = 250
  * period every flicker looks like the screen was lowered and raised again.
  */
 const VISIBLE_GRACE_MS = 300
+
+/** Width or height of a detected screen, whichever is larger, in grid pixels. */
+function blobSpan(blob: TrackedBlob): number {
+  const w = (blob.maxX ?? blob.x) - (blob.minX ?? blob.x)
+  const h = (blob.maxY ?? blob.y) - (blob.minY ?? blob.y)
+  return Math.max(w, h, 1)
+}
 /** A spot that counted recently keeps a wider claim, so the same screen cannot score twice
  *  just because the tracker lost it for a moment. */
-const COOLDOWN_CLAIM = 2.5
+const COOLDOWN_CLAIM = 1.5
 
 export class SourceTracker {
   options: TrackerOptions
@@ -165,8 +183,10 @@ export class SourceTracker {
         const py = source.y + source.vy * lead
         // the search radius still grows with the time out of sight
         const cooling = now < source.cooldownUntil
+        // a distant 3 px screen must not claim a 10 px neighbourhood
+        const scaled = Math.max(3, Math.min(radius, blobSpan(blob) * 2))
         const effective =
-          (cooling ? radius * COOLDOWN_CLAIM : radius) + Math.min(dt * 0.08, MAX_PREDICTED_DRIFT)
+          (cooling ? scaled * COOLDOWN_CLAIM : scaled) + Math.min(dt * 0.08, MAX_PREDICTED_DRIFT)
         const dx = px - blob.x
         const dy = py - blob.y
         const d2 = dx * dx + dy * dy
@@ -179,12 +199,14 @@ export class SourceTracker {
       if (!best) {
         // Before inventing a screen, check EVERY source including those already matched this
         // frame: a split screen would otherwise have its second fragment score a second point.
-        // Tight on purpose: two people sitting side by side are only ~15 grid pixels apart in a
-        // wide shot, so a generous guard would silently merge neighbours. Fragments of one screen
-        // are handled by mergeBlobs, not here; this only stops a piece of a just-counted screen
-        // from scoring twice.
+        // Scaled to the screen we are looking at, never a fixed radius. At the back of a room a
+        // phone is 3 px across and two of them sit 8 px apart: a fixed 10 px guard would swallow
+        // the neighbour, which is exactly what happened on the bench. A fragment of the same
+        // screen, by contrast, is always within about one screen-width.
+        const span = blobSpan(blob)
+        const guard = Math.max(3, Math.min(radius, span * 1.2))
         let near: Source | null = null
-        let nearD2 = radius * radius
+        let nearD2 = guard * guard
         for (const source of this.sources) {
           if (now >= source.cooldownUntil) continue // only a spot that just counted holds ground
           const dx = source.x - blob.x
