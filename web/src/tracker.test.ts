@@ -87,8 +87,10 @@ check('the cap scales with the number of screens actually in the room', () => {
   assert.equal(t.total, 40, '40 phones all count on the first window')
   for (let ms = 100; ms < 3900; ms += 100) t.ingest(forty, ms)
   assert.equal(t.total, 40, 'holding them up does not add more inside the window')
+  // lower them properly: a flicker shorter than the 300 ms grace is not "lowered and raised"
   t.ingest([], 4100)
-  t.ingest(forty, 4200)
+  t.ingest([], 4600)
+  t.ingest(forty, 5000)
   assert.equal(t.total, 80, 'the next window allows another 40')
 })
 
@@ -198,6 +200,16 @@ check('BUG 2: hide and re-show within the cooldown, fragmented, does not count',
   t.ingest([], 1500)
   t.ingest(mergeBlobs([box(104, 42, 116, 72), box(120, 42, 128, 72)], 12), 2500)
   assert.equal(t.total, 1, `still one point: got ${t.total}`)
+})
+
+check('a one-frame flicker is not a new show', () => {
+  const t = new SourceTracker({ ...options })
+  t.ingest([at(100, 50)], 0)
+  for (let ms = 100; ms < 9000; ms += 100) {
+    // the mask drops the screen for a single frame every second, as real masks do
+    t.ingest(ms % 1000 === 0 ? [] : [at(100, 50)], ms)
+  }
+  assert.equal(t.total, 1, `a phone held up through flicker scores once: got ${t.total}`)
 })
 
 check('two genuinely distinct screens are never merged', () => {

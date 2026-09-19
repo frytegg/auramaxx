@@ -80,6 +80,12 @@ const SOURCE_TTL_MS = 10_000
 const MAX_PREDICTED_DRIFT = 45
 /** Velocity is only trustworthy across a few frames; beyond this we assume it stayed put. */
 const MAX_PREDICTION_MS = 250
+/**
+ * Temporal hysteresis: a screen stays "visible" for this long after its blob vanishes. Real masks
+ * flicker — a hand shifts, the angle changes, compression eats a frame — and without a grace
+ * period every flicker looks like the screen was lowered and raised again.
+ */
+const VISIBLE_GRACE_MS = 300
 /** A spot that counted recently keeps a wider claim, so the same screen cannot score twice
  *  just because the tracker lost it for a moment. */
 const COOLDOWN_CLAIM = 2.5
@@ -232,7 +238,10 @@ export class SourceTracker {
       matched.add(best)
     }
 
-    for (const source of this.sources) if (!matched.has(source)) source.visible = false
+    // a source only stops being visible once it has been gone for longer than the grace period
+    for (const source of this.sources) {
+      if (!matched.has(source)) source.visible = now - source.lastSeenAt <= VISIBLE_GRACE_MS
+    }
     this.sources = this.sources.filter((s) => now - s.lastSeenAt < SOURCE_TTL_MS)
   }
 
