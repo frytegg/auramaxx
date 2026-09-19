@@ -170,7 +170,7 @@ function draw(): void {
   }
 
   el.total.textContent = String(result.total)
-  el.visible.textContent = String(result.visible)
+  el.visible.textContent = `${result.visible} écran(s) · ${result.blobs.length} blob(s)`
   const cap = document.getElementById('capInfo')
   if (cap) cap.textContent = `max +${result.visible}/4s (1 par écran)`
   el.mode.textContent = detector.options.mode

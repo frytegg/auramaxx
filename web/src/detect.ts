@@ -10,7 +10,7 @@
  * Magenta because nothing in a room is magenta. Never green — French exit signs are green.
  */
 
-import { SourceTracker, type Mode } from './tracker.js'
+import { SourceTracker, mergeBlobs, type Mode } from './tracker.js'
 
 export type { Mode }
 
@@ -18,6 +18,8 @@ export const GRID_W = 320
 export const GRID_H = 180
 
 export type Options = {
+  /** max gap, in grid pixels, between two fragments of the same screen */
+  mergeGap: number
   /** min(R,B) - G above this counts as magenta. Magenta ~229, white 0, skin ~-67, exit sign ~-200 */
   threshold: number
   /** ignore specks: minimum blob area in grid pixels */
@@ -32,9 +34,12 @@ export type Options = {
 }
 
 export const DEFAULTS: Options = {
+  /** fragments of one screen closer than this are merged before tracking */
+  mergeGap: 12,
   threshold: 60,
   minArea: 6,
-  radius: 18, // bench 19 Sept: 10 was too tight, a moving screen spawned a trail of sources
+  radius: 12, // wide shot: ~25 grid px per metre, so 12 is about half a metre. Bigger than
+  // that and two neighbours merge into one screen.
   cooldownMs: 4000,
   tickMs: 4000,
   mode: 'A',
@@ -44,6 +49,8 @@ export type Blob = { x: number; y: number; area: number; minX: number; minY: num
 
 export type FrameResult = {
   blobs: Blob[]
+  /** blobs after merging fragments: this is the number of actual screens */
+  screens: number
   visible: number
   total: number
   sources: ReadonlyArray<{ x: number; y: number; cooling: boolean }>
@@ -123,6 +130,7 @@ export class MagentaDetector {
     const blobs = this.connectedComponents()
     const result: FrameResult = {
       blobs,
+      screens: blobs.length,
       visible: blobs.length,
       total: this.tracker.total,
       sources: [],
@@ -136,7 +144,11 @@ export class MagentaDetector {
     this.tracker.options.tickMs = this.options.tickMs
     this.tracker.options.mode = this.options.mode
 
-    result.tickJustFired = this.tracker.ingest(blobs, now)
+    // one screen often arrives as several fragments: merge before tracking
+    const screens = mergeBlobs(blobs, this.options.mergeGap)
+    result.screens = screens.length
+    result.tickJustFired = this.tracker.ingest(screens, now)
+    result.visible = screens.length
     result.total = this.tracker.total
     result.sources = this.tracker.sourceViews
     result.ms = performance.now() - started
