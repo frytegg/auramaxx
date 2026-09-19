@@ -7,11 +7,17 @@
  * vector character is a few KB, stays sharp at any projection size and cannot fail to load.
  * Cartoons were 2D long before they were cheap to render.
  *
+ * The head is a photograph of Martin, used with his permission, clipped to the head ellipse and
+ * carrying a light cartoon pass. Everything below the neck stays flat vector, which is the look
+ * the whole thing is going for anyway.
+ *
  * Rigging note. Every joint uses SVG's own `rotate(deg, cx, cy)`, which takes the pivot
  * explicitly, so nothing depends on CSS `transform-origin` — whose behaviour on SVG elements is
  * the usual reason limbs fly off across browsers. Groups nest the way a skeleton does, so a
  * rotated shoulder carries its forearm and hand for free.
  */
+
+import { MARTIN_FACE } from './face.js'
 
 // --- the skeleton. The markup and the animation read these, so they cannot disagree. ---------
 
@@ -29,14 +35,6 @@ const KNEE_R: Pivot = [123, 256]
 type Pivot = readonly [number, number]
 
 const SKIN = '#F0B08A'
-const SKIN_DARK = '#CE8F68'
-/** The ruddy complexion is half the likeness; without it the face reads as a generic cartoon. */
-const BLUSH = '#E08A72'
-const HAIR = '#E6E3E9'
-const HAIR_LINE = '#C3BDCB'
-const BROW = '#BDB7C4'
-/** Dark rectangular frames. Of everything on this face, this is what a room recognises first. */
-const FRAME = '#2B211E'
 const SUIT = '#2E4D80'
 const SUIT_DARK = '#20375C'
 /** Sleeves are deliberately a shade off the jacket. Matched exactly, the arms vanish into the
@@ -55,14 +53,16 @@ function bar(pivot: Pivot, length: number, width: number, fill: string): string 
   return `<rect x="${pivot[0] - width / 2}" y="${pivot[1] - width / 2}" width="${width}" height="${length + width}" rx="${width / 2}" fill="${fill}" ${LINE} />`
 }
 
-function markup(): string {
+let mounted = 0
+
+function markup(uid: string): string {
   return `
 <!-- The viewBox is cropped tight to the character on purpose. On screen his height works out to
      (container width x 299 / viewBox width), so for a fixed slot in the page layout only the
      viewBox HEIGHT sets how big he looks — the width just buys travel. -->
 <svg id="ax-svg" viewBox="0 14 620 334" role="img" aria-label="A dancing mascot">
   <defs>
-    <radialGradient id="ax-glow" cx="50%" cy="50%" r="50%">
+    <radialGradient id="ax-glow-${uid}" cx="50%" cy="50%" r="50%">
       <stop offset="0%" stop-color="${MAGENTA}" stop-opacity=".30" />
       <stop offset="100%" stop-color="${MAGENTA}" stop-opacity="0" />
     </radialGradient>
@@ -70,7 +70,7 @@ function markup(): string {
 
   <g id="ax-slide">
     <ellipse id="ax-shadow" cx="110" cy="336" rx="52" ry="11" fill="${INK}" opacity=".45" />
-    <ellipse cx="110" cy="190" rx="150" ry="160" fill="url(#ax-glow)" />
+    <ellipse cx="110" cy="190" rx="150" ry="160" fill="url(#ax-glow-${uid})" />
 
     <g id="ax-bob">
       <g id="ax-lean">
@@ -121,42 +121,12 @@ function markup(): string {
           </g>
 
           <g id="ax-head">
-            <!-- ears sit outside the face outline, otherwise the head reads as a helmet -->
-            <ellipse cx="70" cy="83" rx="6.5" ry="10" fill="${SKIN}" ${LINE} />
-            <ellipse cx="150" cy="83" rx="6.5" ry="10" fill="${SKIN}" ${LINE} />
-            <ellipse cx="${NECK[0]}" cy="74" rx="39" ry="43" fill="${SKIN}" ${LINE} />
-            <ellipse cx="86" cy="96" rx="12" ry="8" fill="${BLUSH}" opacity=".5" />
-            <ellipse cx="134" cy="96" rx="12" ry="8" fill="${BLUSH}" opacity=".5" />
-
-            <!-- Silver hair swept back. The hairline has to sit HIGH and pull back at the temples:
-                 brought low and even, the same shape reads as a swimming cap, which is exactly what
-                 the first attempt looked like. The two strand lines do the rest of the work. -->
-            <path d="M 70,64 Q 63,26 107,21 Q 150,24 150,64 Q 147,48 139,43 Q 126,35 110,41 Q 94,36 81,45 Q 73,51 70,64 Z" fill="${HAIR}" ${LINE} />
-            <path d="M 80,42 Q 101,30 124,33" fill="none" stroke="${HAIR_LINE}" stroke-width="2.6" stroke-linecap="round" />
-            <path d="M 85,50 Q 105,39 131,41" fill="none" stroke="${HAIR_LINE}" stroke-width="2.6" stroke-linecap="round" />
-
-            <!-- brows clear the frames; tucked behind them they read as a second pair of glasses -->
-            <path d="M 80,55 Q 92,49 104,54" fill="none" stroke="${BROW}" stroke-width="5" stroke-linecap="round" />
-            <path d="M 116,54 Q 128,49 140,55" fill="none" stroke="${BROW}" stroke-width="5" stroke-linecap="round" />
-
-            <ellipse cx="92" cy="75" rx="4.5" ry="5.5" fill="${INK}" />
-            <ellipse cx="128" cy="75" rx="4.5" ry="5.5" fill="${INK}" />
-            <circle cx="93.6" cy="73" r="1.7" fill="#FFFFFF" />
-            <circle cx="129.6" cy="73" r="1.7" fill="#FFFFFF" />
-
-            <!-- big squarish frames over the eyes: the one feature a room recognises instantly -->
-            <rect x="74" y="63" width="34" height="25" rx="4" fill="#F2F7FB" fill-opacity=".14" stroke="${FRAME}" stroke-width="4.5" />
-            <rect x="112" y="63" width="34" height="25" rx="4" fill="#F2F7FB" fill-opacity=".14" stroke="${FRAME}" stroke-width="4.5" />
-            <path d="M 108,70 L 112,70" stroke="${FRAME}" stroke-width="4.5" stroke-linecap="round" />
-            <path d="M 74,69 L 68,72" stroke="${FRAME}" stroke-width="4" stroke-linecap="round" />
-            <path d="M 146,69 L 152,72" stroke="${FRAME}" stroke-width="4" stroke-linecap="round" />
-
-            <!-- a rounded tip, not a hooked line: the thin stroke version read as a scar -->
-            <ellipse cx="110" cy="95" rx="7.5" ry="6" fill="${SKIN}" />
-            <path d="M 103.5,95 Q 110,101 116.5,95" fill="none" stroke="${SKIN_DARK}" stroke-width="3" stroke-linecap="round" />
-
-            <path d="M 89,104 Q 110,122 131,104 Q 110,111 89,104 Z" fill="#8C3A3A" stroke="#08060E" stroke-width="2.5" stroke-linejoin="round" />
-            <path d="M 93,105 Q 110,111 127,105 Q 110,108 93,105 Z" fill="#FFF8F2" />
+            <clipPath id="ax-face-${uid}">
+              <ellipse cx="${NECK[0]}" cy="72" rx="44" ry="48" />
+            </clipPath>
+            <image href="${MARTIN_FACE}" x="66" y="24" width="88" height="96"
+                   preserveAspectRatio="none" clip-path="url(#ax-face-${uid})" />
+            <ellipse cx="${NECK[0]}" cy="72" rx="44" ry="48" fill="none" ${LINE} />
           </g>
         </g>
 
@@ -282,7 +252,7 @@ export { blend }
 export type { Pose }
 
 export function mountRig(host: HTMLElement): Rig {
-  host.innerHTML = markup()
+  host.innerHTML = markup(String(++mounted))
 
   const node = (id: string): SVGGraphicsElement => host.querySelector(`#${id}`) as SVGGraphicsElement
   const slide = node('ax-slide')
