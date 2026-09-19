@@ -15,6 +15,8 @@ import { JOIN_URL, WS_URL, api } from './api.js'
 const $ = (id: string): HTMLElement => document.getElementById(id)!
 const STORAGE_KEY = 'auramaxx.key'
 const STORAGE_NAME = 'auramaxx.profile'
+/** The game the saved name was entered for: a reload inside that game gets it back, a new game does not. */
+const STORAGE_GAME = 'auramaxx.game'
 
 // --- wallet ------------------------------------------------------------------------------
 
@@ -54,6 +56,18 @@ let avatar = avatarIndex(Number(localStorage.getItem('auramaxx.avatar') ?? '0'))
 let seq = -1
 let wakeLock: WakeLockSentinel | null = null
 let manche = 0
+/** The game the server is running: 0 is the landing page, -1 until the first snapshot says. */
+let gameId = -1
+/**
+ * The game this tab joined, or null while the join screen is up. -1 (joined before the first
+ * snapshot) and 0 (joined on the landing page) both mean "the game about to start", which the
+ * server carries its landing arrivals into.
+ */
+let joinedGame: number | null = null
+/** The socket this tab has registered its address on; a reconnect needs a fresh join. */
+let registeredOn: WebSocket | null = null
+/** The name field holds a saved name we put there, not one typed since. */
+let namePrefilled = false
 const QUESTION = 'HOW MANY WILL LIGHT UP?'
 
 function setQuestion(): void {
@@ -80,17 +94,97 @@ for (let index = 0; index < AVATAR_COUNT; index++) {
   avatarGrid.append(cell)
 }
 
+// Empty until the server says which game is running: last game's name must never be on screen,
+// let alone sent, before the player has typed this game's. See offerSavedName().
 const nameInput = $('name') as HTMLInputElement
-nameInput.value = localStorage.getItem(STORAGE_NAME) ?? ''
+nameInput.value = ''
+nameInput.addEventListener('input', () => {
+  namePrefilled = false
+})
 
 $('go').addEventListener('click', () => {
   const name = nameInput.value.trim().slice(0, 12) || 'anon'
   localStorage.setItem(STORAGE_NAME, name)
+  localStorage.setItem(STORAGE_GAME, String(gameId))
+  joinedGame = gameId
   $('meName').textContent = name
   $('meAvatar').replaceChildren(avatarImg(avatar))
+  // if the socket is not up yet this is dropped, and the snapshot that follows the connection
+  // registers the player instead (syncGame)
   send({ type: 'join', address: account.address, name, avatar })
+  registeredOn = socket?.readyState === WebSocket.OPEN ? socket : null
   show('vGame')
 })
+
+/** On the join screen: give a reload its name back, but only inside the game it was typed for. */
+function offerSavedName(): void {
+  const savedFor = Number(localStorage.getItem(STORAGE_GAME) ?? Number.NaN)
+  if (savedFor === gameId && gameId > 0) {
+    if (nameInput.value === '') {
+      nameInput.value = localStorage.getItem(STORAGE_NAME) ?? ''
+      namePrefilled = nameInput.value !== ''
+    }
+  } else if (namePrefilled) {
+    nameInput.value = ''
+    namePrefilled = false
+  }
+}
+
+/**
+ * Keeps this tab in step with the server's game. Same game: carry on, and register again on a new
+ * socket. A different game (New game, back to the landing page, a server restart): back to the join
+ * screen with an empty name, so nothing from the last game reaches the new room.
+ */
+function syncGame(current: number): void {
+  gameId = current
+  if (joinedGame === null) {
+    offerSavedName()
+    return
+  }
+  const aboutToStart = joinedGame === -1 || joinedGame === 0
+  if (joinedGame !== current && !aboutToStart) {
+    backToJoin()
+    return
+  }
+  if (joinedGame !== current) {
+    joinedGame = current
+    localStorage.setItem(STORAGE_GAME, String(current))
+  }
+  const name = localStorage.getItem(STORAGE_NAME)
+  if (name && socket?.readyState === WebSocket.OPEN && registeredOn !== socket) {
+    send({ type: 'join', address: account.address, name, avatar })
+    registeredOn = socket
+  }
+}
+
+/** A new game: forget the last one entirely and wait for the player to join again. */
+function backToJoin(): void {
+  joinedGame = null
+  registeredOn = null
+  leaveMagenta()
+  round = null
+  shownPhase = ''
+  manche = 0
+  myUp = 0
+  myDown = 0
+  myStake = 0
+  aura = 1000
+  selectedSide = null
+  $('sideUp').classList.remove('sel')
+  $('sideDown').classList.remove('sel')
+  $('meAura').textContent = '1000'
+  $('meName').textContent = '—'
+  $('meAvatar').replaceChildren()
+  $('walletBox').style.display = 'none'
+  $('finalRank').classList.remove('on')
+  setTick('idle')
+  setQuestion()
+  setHidden(true)
+  nameInput.value = ''
+  namePrefilled = false
+  updateStatus()
+  show('vJoin')
+}
 
 function show(id: string): void {
   for (const view of document.querySelectorAll('.view')) view.classList.remove('on')
@@ -236,15 +330,9 @@ function connect(): void {
   const url = WS_URL
   socket = new WebSocket(url)
 
-  socket.addEventListener('open', () => {
-    // Re-register after a dropped socket, so a phone that lost the network mid-round can still
-    // bet. NOT while the join screen is still up: firing the saved name before the player has
-    // chosen one puts last game's pseudonym on the projector before they have touched anything.
-    const name = localStorage.getItem(STORAGE_NAME)
-    if (name && !$('vJoin').classList.contains('on')) {
-      send({ type: 'join', address: account.address, name, avatar })
-    }
-  })
+  // No join here. A phone that lost the network mid-round registers again, but only once the
+  // snapshot the server sends on every connection says it is still the same game (syncGame):
+  // firing the saved name blindly is how last game's pseudonym reached a new game's wall.
 
   socket.addEventListener('message', (event) => {
     const msg = JSON.parse(String(event.data)) as Record<string, unknown>
@@ -271,6 +359,7 @@ document.addEventListener('visibilitychange', () => {
 function handle(msg: Record<string, unknown>): void {
   switch (msg.type) {
     case 'snapshot': {
+      syncGame(Number(msg.gameId ?? 0))
       manche = Number(msg.manche ?? manche)
       const you = msg.you as Record<string, unknown> | null
       if (you) {
@@ -285,6 +374,11 @@ function handle(msg: Record<string, unknown>): void {
       }
       applyRound(msg.round as Record<string, unknown> | null)
       updateStatus()
+      break
+    }
+    case 'game': {
+      // New game or back to the landing page: the server has forgotten the room
+      syncGame(Number(msg.gameId ?? 0))
       break
     }
     case 'open': {

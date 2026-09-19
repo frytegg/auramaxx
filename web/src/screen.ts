@@ -142,7 +142,10 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       $('liveCount').textContent = '—'
       $('liveThreshold').textContent = '?'
       $('clock').textContent = '—'
-      renderRoster(undefined) // a fresh game starts with an empty wall
+      // a fresh game starts with an empty wall and an empty board (the server only carries in
+      // whoever joined while the landing page was up)
+      renderRoster(msg.roster as Array<{ address?: unknown; name?: unknown; avatar?: unknown }> | undefined)
+      renderLeaderboard((msg.leaderboard as Array<Record<string, unknown>> | undefined) ?? [])
       // gameId 0 is the régie sending everyone back to the landing page
       setStage(Number(msg.gameId ?? 1) === 0 ? 'lobby' : 'join')
       hideFinal()

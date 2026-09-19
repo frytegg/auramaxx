@@ -37,8 +37,15 @@ export type Player = {
   name: string
   avatar: number
   onChain: boolean
+  /** AURA farmed in THIS game: the contract's cumulative profit minus `baseline`. */
   profit: number
-  /** The game they last joined. The lobby wall shows this game's room, not everyone ever seen. */
+  /**
+   * The contract's profit for this address when it joined this game. The contract never forgets a
+   * player and its profit only resets at the MON payout, so a phone back from an unpaid rehearsal
+   * would otherwise start the new game with last game's score. null until first read.
+   */
+  baseline: number | null
+  /** The game they joined. The lobby wall shows this game's room, not everyone ever seen. */
   game: number
 }
 
@@ -83,12 +90,16 @@ let finalStandings: Standing[] | null = null
  * 0 means no game is open and the projector shows its landing page.
  *
  * `gameSeq` only ever counts up, and `gameId` takes its value. Deriving the id from a counter that
- * goes back to 0 on a reset would hand the next game the id the last one had — and since players
- * are stamped with the game they joined, the whole previous room would silently still be in it.
+ * goes back to 0 on a reset would hand the next game the id the last one had. It starts at the
+ * boot time rather than at 0 for the same reason across a restart (every Render deploy is one): a
+ * phone that joined game 1 before a redeploy must never believe it is in the new game 1 after it.
  */
-let gameSeq = 0
+let gameSeq = Date.now()
 let gameId = 0
 let joinQueue: Player[] = []
+/** Players the contract has registered (it counts them all, ever): what the line is computed from. */
+let registeredOnChain = 0
+const knownOnChain = new Set<Address>()
 const listeners = new Set<(event: unknown) => void>()
 
 export function onBroadcast(fn: (event: unknown) => void): () => void {
@@ -103,40 +114,50 @@ function emit(event: Record<string, unknown>): void {
 // --- the game --------------------------------------------------------------------------
 
 /**
- * Opens a lobby. Drops any round in progress and puts the manche counter back to zero, which is
- * what the projector waits on to show the join QR.
+ * A fresh game: drops any round in progress, puts the manche counter back to zero (which is what
+ * the projector waits on to show the join QR) and forgets every player, so the room, the lobby
+ * wall and the leaderboard all start empty. Everyone joins again with the name they pick now.
  *
- * Players are deliberately kept: they are already registered on chain and their profits live in
- * the contract, so forgetting them here would only make this server disagree with the chain.
+ * The one exception is whoever joined while the landing page was up (game 0): they joined for the
+ * game that is starting, so they are carried into it.
+ *
+ * The contract keeps its players regardless — it has no way to forget one — which is why profits
+ * are counted from a per-game baseline rather than read raw.
  */
 export function newGame(): { gameId: number; players: number } {
   round = null
   manche = 0
   finalStandings = null
+  const fromLanding = gameId === 0
+  forgetPlayers((p) => fromLanding && p.game === 0)
   gameSeq += 1
   gameId = gameSeq
-  emit({ type: 'game', gameId, players: 0 })
-  log.info({ gameId }, 'new game')
-  return { gameId, players: 0 }
+  for (const p of players.values()) p.game = gameId
+  emit({ type: 'game', gameId, players: players.size, roster: roster(), leaderboard: leaderboard() })
+  log.info({ gameId, carried: players.size }, 'new game')
+  return { gameId, players: players.size }
 }
 
 /**
  * Back to the landing page. `gameId` going to 0 is what the projector waits on, and nothing else
  * sets it back — without this a server restart was the only way to see the landing page again,
- * which is unusable for rehearsing.
- *
- * Players and their on-chain profits are kept, for the same reason newGame keeps them: the
- * contract still holds them, so dropping them here would only make this server tell a different
- * story from the chain.
+ * which is unusable for rehearsing. The room is forgotten here too: the next game starts empty.
  */
 export function resetGame(): { gameId: number } {
   round = null
   manche = 0
   finalStandings = null
   gameId = 0
-  emit({ type: 'game', gameId, players: 0 })
+  forgetPlayers(() => false)
+  emit({ type: 'game', gameId, players: 0, roster: [], leaderboard: [] })
   log.info('reset to the landing page')
   return { gameId }
+}
+
+/** Drops every player `keep` rejects, with any join still waiting to go on chain. */
+function forgetPlayers(keep: (p: Player) => boolean): void {
+  for (const [address, p] of players) if (!keep(p)) players.delete(address)
+  joinQueue = joinQueue.filter((p) => players.get(p.address) === p)
 }
 
 // --- joining ---------------------------------------------------------------------------
@@ -166,7 +187,7 @@ export function join(address: Address, name: string, avatar: number): Player {
     return existing
   }
 
-  const player: Player = { address, name: clean, avatar: chosen, onChain: false, profit: 0, game: gameId }
+  const player: Player = { address, name: clean, avatar: chosen, onChain: false, profit: 0, baseline: null, game: gameId }
   players.set(address, player)
   joinQueue.push(player)
   emit({ type: 'joined', address, name: clean, avatar: chosen, total: roster().length })
@@ -189,7 +210,15 @@ async function flushJoins(): Promise<void> {
     log.info({ n: batch.length }, 'joins committed')
   } catch (error: unknown) {
     log.error({ err: String(error) }, 'joinBatch failed, requeueing')
-    joinQueue = [...batch, ...joinQueue]
+    // only the ones still in the room: a player dropped by a new game meanwhile stays dropped
+    joinQueue = [...batch.filter((p) => players.get(p.address) === p), ...joinQueue]
+  }
+  // read the arrivals' starting profit now, well before any round of this game can settle, and
+  // the registered count the line is computed from
+  try {
+    await refreshProfits()
+  } catch (error: unknown) {
+    log.warn({ err: String(error) }, 'could not read profits after joins, will retry')
   }
 }
 
@@ -249,6 +278,15 @@ export async function openRound(kind: 0 | 1): Promise<void> {
   // the régie can open a round without anyone having pressed "Start a game" on the projector;
   // give that path a game too, so both entry points leave the same state behind
   if (gameId === 0) newGame()
+  // every baseline must be read before this round can pay anyone, or its gains would be counted
+  // as last game's; flushJoins normally got there already, this covers a failed read
+  if ([...players.values()].some((p) => p.baseline === null)) {
+    try {
+      await refreshProfits()
+    } catch (error: unknown) {
+      log.warn({ err: String(error) }, 'could not read starting profits before the round')
+    }
+  }
   const id = Number(await publicClient().readContract({ address: contract, abi: AURAMAXX_ABI, functionName: 'roundCount' }))
   // the on-chain deadline for committing bets. Betting now opens BEFORE the clock with no time
   // limit, and 900 blocks (~5 min at ~0.3 s) could expire while the room is still betting, which
@@ -299,9 +337,14 @@ export function start(): void {
   log.info({ id: round.id, bettors: round.stake.size }, 'clock started')
 }
 
-/** Same formula as Auramaxx.freeze(): registered players, not bettors, since the contract change. */
+/**
+ * Same formula as Auramaxx.freeze(), on the same input: every player the contract has registered,
+ * ever — not this server's room, which a new game empties while the contract keeps counting. Plus
+ * the arrivals still queued for joinBatch whose address the contract does not know yet.
+ */
 function projectedThreshold(_r: RoundState): number {
-  return Math.floor((players.size * TICKS * THRESHOLD_PCT) / 100)
+  const pending = joinQueue.filter((p) => !knownOnChain.has(p.address)).length
+  return Math.floor(((registeredOnChain + pending) * TICKS * THRESHOLD_PCT) / 100)
 }
 
 /** The camera page pushes this; it is also what settles a magenta round. */
@@ -407,35 +450,53 @@ export async function settle(): Promise<void> {
   }
 }
 
-/** Reads profits back from the contract — never from logs, which only reach back 100 blocks. */
-export async function refreshProfits(): Promise<void> {
+/** Every registered player's cumulative profit, straight from the contract. */
+async function readOnChainProfits(): Promise<Map<Address, number>> {
   const count = Number(
     await publicClient().readContract({ address: contract, abi: AURAMAXX_ABI, functionName: 'playerCount' }),
   )
-  if (count === 0) return
-  const [addrs, , , profits] = (await publicClient().readContract({
-    address: contract,
-    abi: AURAMAXX_ABI,
-    functionName: 'getPlayers',
-    args: [0, count],
-  })) as [Address[], Hex[], number[], bigint[]]
-  addrs.forEach((address, i) => {
-    const p = players.get(address)
-    if (p) p.profit = Number(profits[i] ?? 0n)
-  })
+  const profits = new Map<Address, number>()
+  if (count > 0) {
+    const [addrs, , , raw] = (await publicClient().readContract({
+      address: contract,
+      abi: AURAMAXX_ABI,
+      functionName: 'getPlayers',
+      args: [0, count],
+    })) as [Address[], Hex[], number[], bigint[]]
+    addrs.forEach((address, i) => profits.set(address, Number(raw[i] ?? 0n)))
+  }
+  registeredOnChain = count
+  for (const address of profits.keys()) knownOnChain.add(address)
+  return profits
 }
 
+/**
+ * Reads profits back from the contract — never from logs, which only reach back 100 blocks — and
+ * turns them into this game's score: what each player has gained since they joined this game.
+ */
+export async function refreshProfits(): Promise<Map<Address, number>> {
+  const onChain = await readOnChainProfits()
+  for (const p of players.values()) {
+    // an address the contract does not know yet is a new player, and a new player starts at 0
+    const cumulative = onChain.get(p.address) ?? 0
+    if (p.baseline === null) p.baseline = cumulative
+    p.profit = Math.max(0, cumulative - p.baseline)
+  }
+  return onChain
+}
+
+/**
+ * payoutMon pays every registered player the contract owes — including profit left unpaid by an
+ * earlier game, since the contract cannot tell games apart. The numbers announced are therefore
+ * computed from the contract's own figures for the whole range, so they match the transaction.
+ */
 export async function payout(): Promise<{ hash: Hex; total: number; winners: number }> {
-  await refreshProfits()
-  const winners = [...players.values()].filter((p) => p.profit > 0)
-  const total = winners.reduce((sum, p) => sum + p.profit / 100, 0)
-  const count = Number(
-    await publicClient().readContract({ address: contract, abi: AURAMAXX_ABI, functionName: 'playerCount' }),
-  )
-  const payoutArgs = [0, count] as const
-  const result = await send('payoutMon', payoutArgs, await gasFor('payoutMon', payoutArgs, GAS.payout(count)))
-  emit({ type: 'payout', txHash: result.hash, totalMon: total, winners: winners.length })
-  return { hash: result.hash, total, winners: winners.length }
+  const owed = [...(await refreshProfits()).values()].filter((profit) => profit > 0)
+  const total = owed.reduce((sum, profit) => sum + profit / 100, 0)
+  const payoutArgs = [0, registeredOnChain] as const
+  const result = await send('payoutMon', payoutArgs, await gasFor('payoutMon', payoutArgs, GAS.payout(registeredOnChain)))
+  emit({ type: 'payout', txHash: result.hash, totalMon: total, winners: owed.length })
+  return { hash: result.hash, total, winners: owed.length }
 }
 
 /**
@@ -558,6 +619,9 @@ export function startLoop(): void {
 
   setInterval(() => void flushJoins(), 2000)
   setInterval(() => void tickGas(), 15_000)
+  // the projected line needs the contract's registered count from the first round on, even after
+  // a restart that left this server with an empty room
+  refreshProfits().catch((error: unknown) => log.warn({ err: String(error) }, 'could not read the registered players at boot'))
 
   setInterval(() => {
     const r = round

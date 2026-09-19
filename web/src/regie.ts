@@ -196,7 +196,7 @@ const PAYOUT_CONFIRM =
 /** The single step that makes sense now. The ticket's big button is always this. */
 function nextAction(): Action {
   if (!s.connected) return { op: null, label: s.everConnected ? 'Reconnecting…' : 'Connecting…', hint: 'Waiting for the game server.' }
-  if (s.payout) return { op: 'game', label: 'Start a new game', hint: 'Rounds restart from 1 and the projector shows the join QR. Players stay registered.' }
+  if (s.payout) return { op: 'game', label: 'Start a new game', hint: 'Clears every player: phones go back to the join screen and the projector shows the join QR.' }
   const seconds = Math.round(s.durationMs / 1000)
   switch (s.phase) {
     case 'idle':
@@ -338,7 +338,14 @@ function handle(msg: Msg): void {
       s.phase = 'idle'
       s.payout = null
       clearRound()
-      log(s.gameId === 0 ? 'Back to the landing page' : `New game · lobby open, ${s.players} players registered`)
+      // the server forgets the room on a new game: the board starts from whoever it carried in
+      s.leaderboard = []
+      setLeaderboard(msg.leaderboard)
+      log(
+        s.gameId === 0
+          ? 'Back to the landing page · players cleared'
+          : `New game · players cleared${s.players > 0 ? `, ${s.players} carried in from the landing page` : ''}`,
+      )
       break
     }
     case 'joined': {
@@ -792,8 +799,9 @@ for (const button of document.querySelectorAll<HTMLButtonElement>('[data-op]')) 
 $('newGame').addEventListener('click', () => {
   run(
     'game',
-    s.manche > 0 && s.payout === null
-      ? 'Start a new game?\n\nThe game in progress is dropped and rounds restart from 1. Players stay registered.'
+    // it wipes the room, so a lobby full of people deserves the question too, not just a live game
+    (s.manche > 0 || s.players > 0) && s.payout === null
+      ? `Start a new game?\n\nEvery player is removed (${s.players} now): phones go back to the join screen and everyone joins again. Any round in progress is dropped.`
       : undefined,
   )
 })
@@ -801,7 +809,7 @@ $('newGame').addEventListener('click', () => {
 $('resetGame').addEventListener('click', () => {
   run(
     'reset',
-    s.gameId !== 0 ? 'Send the projector back to the landing page?\n\nAny round in progress is dropped. Players and their profits stay: they live in the contract.' : undefined,
+    s.gameId !== 0 ? 'Send the projector back to the landing page?\n\nEvery player is removed and any round in progress is dropped. Phones go back to the join screen.' : undefined,
   )
 })
 
