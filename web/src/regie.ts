@@ -3,6 +3,7 @@
  * state shown here comes from the same WebSocket the phones use, so the operator sees exactly
  * what the room sees. Reveals pause the round on the server: "Reprendre" is what restarts it.
  */
+import { JOIN_URL, WS_URL, api } from './api.js'
 const $ = (id: string): HTMLElement => document.getElementById(id)!
 const AVATARS = ['🦊', '🐸', '👽', '🤖', '🐙', '🦈', '🔥', '💎', '🍄', '👾', '🦍', '🌀']
 const PHASES: Record<string, string> = {
@@ -33,7 +34,7 @@ function log(text: string, error = false): void {
 async function op(path: string, query: Record<string, string> = {}): Promise<void> {
   const params = new URLSearchParams({ k: keyInput.value, ...query })
   try {
-    const response = await fetch(`/op/${path}?${params.toString()}`, { method: 'POST' })
+    const response = await fetch(api(`/op/${path}?${params.toString()}`), { method: 'POST' })
     const body = (await response.json().catch(() => ({}))) as Record<string, unknown>
     if (response.status === 403) return log('clé régie refusée', true)
     if (!response.ok) return log(`${path} : erreur ${response.status}`, true)
@@ -146,7 +147,7 @@ function handle(msg: Record<string, unknown>): void {
 }
 
 function connect(): void {
-  const socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`)
+  const socket = new WebSocket(WS_URL)
   socket.addEventListener('open', () => $('conn').classList.add('on'))
   socket.addEventListener('message', (event) => handle(JSON.parse(String(event.data)) as Record<string, unknown>))
   socket.addEventListener('close', () => {

@@ -2,6 +2,7 @@
  * Projector screen. Reads from the server over one WebSocket; never touches an RPC, so the
  * number of players does not change how much traffic this page makes.
  */
+import { JOIN_URL, WS_URL, api } from './api.js'
 
 const $ = (id: string): HTMLElement => document.getElementById(id)!
 
@@ -14,7 +15,7 @@ let seq = -1
 let leaderboardHtml = ''
 
 function connect(): void {
-  const url = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`
+  const url = WS_URL
   const socket = new WebSocket(url)
 
   socket.addEventListener('open', () => {
@@ -182,13 +183,13 @@ function hideFlash(): void {
 
 // the join QR covers the live count until a round opens, then gets out of the way
 const qr = $('qr') as HTMLImageElement
-qr.src = `/api/qr.svg?url=${encodeURIComponent(location.origin + '/')}`
+qr.src = api(`/api/qr.svg?url=${encodeURIComponent(JOIN_URL)}`)
 
 function setJoinVisible(visible: boolean): void {
   $('join').classList.toggle('off', !visible)
 }
 
-void fetch('/api/config')
+void fetch(api('/api/config'))
   .then((r) => r.json())
   .then((config: { contract: string }) => {
     $('contract').textContent = config.contract

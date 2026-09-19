@@ -8,6 +8,7 @@
  */
 import { encodePacked, keccak256, type Address, type Hex } from 'viem'
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
+import { JOIN_URL, WS_URL, api } from './api.js'
 
 const $ = (id: string): HTMLElement => document.getElementById(id)!
 const AVATARS = ['🦊', '🐸', '👽', '🤖', '🐙', '🦈', '🔥', '💎', '🍄', '👾', '🦍', '🌀']
@@ -188,7 +189,7 @@ function send(message: Record<string, unknown>): void {
 }
 
 function connect(): void {
-  const url = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`
+  const url = WS_URL
   socket = new WebSocket(url)
 
   socket.addEventListener('open', () => {
@@ -386,7 +387,7 @@ $('copyKey').addEventListener('click', () => {
 })
 
 
-void fetch('/api/config')
+void fetch(api('/api/config'))
   .then((r) => r.json())
   .then((data: { contract: Address; chainId: number }) => {
     config = data

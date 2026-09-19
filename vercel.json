@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm i -g pnpm@10.19.0 && pnpm -C web install --no-frozen-lockfile && pnpm -C web build",
+  "outputDirectory": "web/dist",
+  "installCommand": "echo skip",
+  "framework": null,
+  "headers": [
+    {
+      "source": "/assets/(.*)",
+      "headers": [{ "key": "cache-control", "value": "public, max-age=31536000, immutable" }]
+    },
+    {
+      "source": "/(.*).html",
+      "headers": [{ "key": "cache-control", "value": "no-store" }]
+    }
+  ]
+}

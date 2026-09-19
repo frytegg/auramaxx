@@ -29,6 +29,17 @@ import {
 const here = path.dirname(fileURLToPath(import.meta.url))
 const app = Fastify({ logger: false, trustProxy: true })
 
+// A statically hosted front (Vercel) talks to this backend cross-origin. The game holds no
+// personal data and every write is either signed by the player or guarded by OP_KEY, so a
+// permissive CORS is the right trade here — but keep credentials off.
+app.addHook('onRequest', async (request, reply) => {
+  reply.header('access-control-allow-origin', '*')
+  reply.header('access-control-allow-headers', 'content-type')
+  reply.header('access-control-allow-methods', 'GET,POST,OPTIONS')
+  if (request.method === 'OPTIONS') return reply.code(204).send()
+  return undefined
+})
+
 await app.register(websocket)
 await app.register(fastifyStatic, {
   root: path.resolve(here, '../../web/dist'),
