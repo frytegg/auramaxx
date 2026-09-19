@@ -11,6 +11,7 @@ import { privateKeyToAccount } from 'viem/accounts'
 import { env } from './env.js'
 import { log } from './log.js'
 import { AURAMAXX_ABI } from './abi.js'
+import { DEMO, demoBlock, demoClient, demoSend } from './demo.js'
 
 export const monadTestnet = defineChain({
   id: env.CHAIN_ID,
@@ -32,7 +33,7 @@ const wallets = transports.map((url) =>
   createWalletClient({ account, chain: monadTestnet, transport: http(url, { timeout: 12_000, retryCount: 1 }) }),
 )
 
-export const publicClient = () => clients[rpcIndex]!
+export const publicClient = () => (DEMO ? (demoClient as unknown as (typeof clients)[number]) : clients[rpcIndex]!)
 export const walletClient = () => wallets[rpcIndex]!
 
 export function failoverRpc(): string {
@@ -67,6 +68,7 @@ export async function gasFor(
   args: readonly unknown[],
   fallback: bigint,
 ): Promise<bigint> {
+  if (DEMO) return fallback
   try {
     const estimate = await publicClient().estimateContractGas({
       address: contract,
@@ -112,6 +114,7 @@ export async function send(
   args: readonly unknown[],
   gas: bigint,
 ): Promise<SendResult> {
+  if (DEMO) return demoSend(functionName, args)
   const started = Date.now()
   const data = encodeFunctionData({ abi: AURAMAXX_ABI, functionName, args } as never)
 
@@ -170,6 +173,7 @@ export async function send(
 }
 
 export async function blockNumber(): Promise<bigint> {
+  if (DEMO) return demoBlock()
   try {
     return await publicClient().getBlockNumber()
   } catch {
@@ -181,6 +185,7 @@ export async function blockNumber(): Promise<bigint> {
 /** Cumulative gas spend, read as a balance delta — the only honest way on Monad. */
 let startingBalance: bigint | null = null
 export async function gasSpent(): Promise<{ spent: number; balance: number }> {
+  if (DEMO) return { spent: 0, balance: 30 }
   const balance = await publicClient().getBalance({ address: account.address })
   if (startingBalance === null) startingBalance = balance
   return { spent: Number(startingBalance - balance) / 1e18, balance: Number(balance) / 1e18 }

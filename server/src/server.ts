@@ -19,6 +19,7 @@ import {
   openRound,
   payout,
   resume,
+  setCount,
   settle,
   snapshot,
   startLoop,
@@ -183,6 +184,14 @@ app.post('/op/settle', async (request, reply) => {
   if (!guard(request)) return reply.code(403).send({ error: 'nope' })
   await settle()
   return { ok: true }
+})
+
+/** Manual camera count, for the régie when no camera page is running (demo, or a dead camera). */
+app.post('/op/count', async (request, reply) => {
+  if (!guard(request)) return reply.code(403).send({ error: 'nope' })
+  const n = Math.max(0, Math.floor(Number((request.query as { n?: string }).n ?? 0)))
+  setCount(n)
+  return { ok: true, count: n }
 })
 
 app.post('/op/payout', async (request, reply) => {

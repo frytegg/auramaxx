@@ -1,4 +1,5 @@
 import { log } from './log.js'
+import { DEMO, demoPrice } from './demo.js'
 
 /**
  * Round 1's oracle. We measured every BTC feed on Monad testnet this morning: RedStone reverts
@@ -66,6 +67,16 @@ async function poll(): Promise<void> {
     } catch (error: unknown) {
       log.debug({ source: source.name, err: String(error) }, 'price source failed')
     }
+  }
+  if (DEMO) {
+    // offline laptop: keep the curve alive with a synthetic walk rather than a frozen chart
+    const at = Date.now()
+    const point = { t: at, p: demoPrice() }
+    last = { price: point.p, at, source: 'demo' }
+    history.push(point)
+    if (history.length > HISTORY_MAX) history.shift()
+    for (const fn of listeners) fn(point)
+    return
   }
   log.warn('every price source failed')
 }

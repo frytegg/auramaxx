@@ -12,7 +12,18 @@ const schema = z.object({
 
 /** Validated at startup: the process must crash immediately if anything is missing. */
 export const env = (() => {
-  const parsed = schema.safeParse(process.env)
+  // DEMO=1 runs against the in-memory contract in demo.ts: no secret is needed, so fill
+  // throwaway placeholders (never funded, never sent anywhere) instead of crashing.
+  const source =
+    process.env.DEMO === '1' || process.argv.includes('--demo')
+      ? {
+          RELAYER_PRIVATE_KEY: `0x${'11'.repeat(32)}`,
+          CONTRACT_ADDRESS: `0x${'de'.repeat(20)}`,
+          OP_KEY: 'demo123',
+          ...process.env,
+        }
+      : process.env
+  const parsed = schema.safeParse(source)
   if (!parsed.success) {
     // Never print values — only which keys are wrong.
     const issues = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('\n  ')

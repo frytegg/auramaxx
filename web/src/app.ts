@@ -253,7 +253,8 @@ function handle(msg: Record<string, unknown>): void {
       $('downName').textContent = round.kind === 0 ? 'DOWN' : 'UNDER'
       setHidden(true)
       setTick('idle')
-      show('vGame')
+      // a phone still on the join screen stays there: the round must not skip onboarding
+      if (!$('vJoin').classList.contains('on')) show('vGame')
       updateStatus()
       break
     }

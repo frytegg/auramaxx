@@ -4,21 +4,25 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>AURAMAXX — screen</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;600;700&display=swap" />
     <style>
-      :root { color-scheme: dark; --magenta: #FF00E5; --up: #3bf59b; --down: #ff5c7a; }
+      /* design tokens from frontend/assets/style.css */
+      :root { color-scheme: dark; --magenta: #FF2E9E; --up: #35E28C; --down: #FF4D6A; }
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
-        background: #07070d; color: #e9e9f2; overflow: hidden; height: 100vh;
-        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        background: radial-gradient(90% 70% at 50% -20%, #2B0F52 0%, #0B0710 60%) fixed, #0B0710;
+        color: #F8F3F7; overflow: hidden; height: 100vh;
+        font-family: 'Space Grotesk', system-ui, sans-serif;
       }
       .screen { height: 100vh; display: grid; grid-template-rows: auto 1fr auto; gap: 18px; padding: 28px 36px; }
 
       header { display: flex; align-items: baseline; justify-content: space-between; }
-      .brand { font-size: 26px; font-weight: 800; letter-spacing: .22em; color: var(--magenta); }
+      .brand { font-family: 'Anton', sans-serif; font-size: 34px; font-weight: 400; letter-spacing: 3px; color: var(--magenta); }
       .players { font-size: 20px; opacity: .65; }
 
-      .question { font-size: 54px; font-weight: 800; line-height: 1.05; }
-      .clock { font-size: 92px; font-weight: 800; font-variant-numeric: tabular-nums; }
+      .question { font-family: 'Anton', sans-serif; font-size: 54px; font-weight: 800; line-height: 1.05; }
+      .clock { font-family: 'Anton', sans-serif; font-size: 92px; font-weight: 800; font-variant-numeric: tabular-nums; }
       .clock.paused { color: var(--magenta); }
 
       .main { display: grid; grid-template-columns: 1fr 380px; gap: 26px; min-height: 0; }
@@ -38,7 +42,7 @@
       .pool.up { border-color: rgba(59,245,155,.5); }
       .pool.down { border-color: rgba(255,92,122,.5); }
       .pool .label { font-size: 15px; letter-spacing: .16em; opacity: .7; }
-      .pool .mult { font-size: 44px; font-weight: 800; font-variant-numeric: tabular-nums; }
+      .pool .mult { font-family: 'Anton', sans-serif; font-size: 44px; font-weight: 800; font-variant-numeric: tabular-nums; }
       .pool.up .mult { color: var(--up); }
       .pool.down .mult { color: var(--down); }
       .pool .sub { font-size: 15px; opacity: .6; }
@@ -55,7 +59,7 @@
         background: rgba(7,7,13,.94); z-index: 20;
       }
       .flash.on { display: grid; }
-      .flash .big { font-size: 120px; font-weight: 800; }
+      .flash .big { font-family: 'Anton', sans-serif; font-size: 120px; font-weight: 800; }
       .flash .sub { font-size: 30px; margin-top: 12px; }
       .flash .hash { font-size: 17px; opacity: .6; margin-top: 18px; word-break: break-all; }
     </style>
