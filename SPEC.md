@@ -304,9 +304,9 @@ inside our own slot only.**
 | # | Decision |
 |---|---|
 | 1 | Magenta counting: **MODE A** (position tracking, 4 s cooldown per spot). Players asked to spread out. **MODE B** (tick sampling) stays one keystroke away on `T` |
-| 2 | Q2 threshold: **45% of `N × 11`**, computed by the contract, constant recalibrated after the camera test |
+| 2 | Q2 threshold: **45% of `N × 11`** where `N` is the number of REGISTERED players, computed by the contract at freeze. Not connected players: the chain cannot see a socket, so that number would have to be submitted by the backend — which hands the operator the exact lever this design removes |
 | 3 | Stake UI: **four buttons 100 / 250 / 500 / ALL IN**, capped at `1000 − already staked` |
-| 4 | Reveals: **add-only**, never switch sides |
+| 4 | Reveals: **add-only**, but **both sides allowed**. Chips already down never move; new chips may go either way, and the 1,000 budget caps the two legs together, so hedging costs real chips. Each leg is paid on its own merit |
 | 5 | MON payout: **no cap**, 1 MON per 100 AURA of profit |
 | 6 | **"Export my wallet" is in** |
 | 7 | On stage: **Alex + Martin**, one talks while the other drives `/op`. Rehearse at least once |

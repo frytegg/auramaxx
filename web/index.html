@@ -67,7 +67,8 @@
       .side.down .name { color: var(--down); }
       .side.up.sel { border-color: var(--up); background: rgba(53,226,140,.12); box-shadow: 0 0 30px rgba(53,226,140,.35); }
       .side.down.sel { border-color: var(--down); background: rgba(255,77,106,.12); box-shadow: 0 0 30px rgba(255,77,106,.35); }
-      .side.locked { opacity: .3; }
+      .side.mine { border-color: var(--magenta); }
+      .side .mine { font-size: 13px; font-weight: 700; color: var(--magenta); margin-top: 6px; min-height: 17px; }
 
       /* stake buttons styled as the casino chips from chip-mise.js */
       .stakes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; justify-items: center; }
@@ -123,8 +124,8 @@
       <div class="question" id="q">en attente de la manche…</div>
       <div class="clock" id="clock">—</div>
       <div class="sides">
-        <div class="side up" id="sideUp"><div class="name" id="upName">OVER</div><div class="mult" id="upMult">caché</div></div>
-        <div class="side down" id="sideDown"><div class="name" id="downName">UNDER</div><div class="mult" id="downMult">caché</div></div>
+        <div class="side up" id="sideUp"><div class="name" id="upName">OVER</div><div class="mult" id="upMult">caché</div><div class="mine" id="upMine"></div></div>
+        <div class="side down" id="sideDown"><div class="name" id="downName">UNDER</div><div class="mult" id="downMult">caché</div><div class="mine" id="downMine"></div></div>
       </div>
       <div class="stakes">
         <button data-stake="100">100</button>

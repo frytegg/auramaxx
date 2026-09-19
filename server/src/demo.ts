@@ -6,8 +6,9 @@ import type { SendResult } from './chain.js'
  * DEMO=1: an in-memory stand-in for the Auramaxx contract, so the whole app (phones, projector,
  * régie) can be previewed on a laptop with no relayer key, no deployed contract and no MON.
  * It mirrors exactly the functions game.ts calls, with the same maths as Auramaxx.sol
- * (threshold = bettors × TICKS × 45%, parimutuel payout stake × total / winningPool, refund
- * when the winning side is empty). Nothing here ever touches a network.
+ * (threshold = registered players × TICKS × 45%, both sides bettable with one shared budget,
+ * parimutuel payout winningLeg × total / winningPool, refund when the winning side is empty).
+ * Nothing here ever touches a network.
  */
 export const DEMO = process.env.DEMO === '1' || process.argv.includes('--demo')
 
@@ -21,7 +22,7 @@ type Round = {
   poolUp: bigint
   poolDown: bigint
   threshold: number
-  bettors: Map<Address, { side: number; stake: bigint }>
+  bettors: Map<Address, { up: bigint; down: bigint }>
 }
 
 const players: Array<{ addr: Address; name: Hex; avatar: number; profit: bigint }> = []
@@ -37,10 +38,12 @@ function settle(r: Round, winner: number): void {
   const total = r.poolUp + r.poolDown
   const pw = winner === 0 ? r.poolUp : r.poolDown
   for (const [addr, b] of r.bettors) {
-    const payout = pw === 0n ? b.stake : b.side === winner ? (b.stake * total) / pw : 0n
-    if (payout > b.stake) {
+    const committed = b.up + b.down
+    const winningLeg = winner === 0 ? b.up : b.down
+    const payout = pw === 0n ? committed : (winningLeg * total) / pw
+    if (payout > committed) {
       const p = players.find((x) => x.addr.toLowerCase() === addr.toLowerCase())
-      if (p) p.profit += payout - b.stake
+      if (p) p.profit += payout - committed
     }
   }
   r.status = 2
@@ -67,17 +70,21 @@ export async function demoSend(functionName: string, args: readonly unknown[]): 
     case 'commitBatch': {
       const r = rounds[Number(a[0])]!
       for (const e of a[1] as Entry[]) {
-        const current = r.bettors.get(e.player)
-        r.bettors.set(e.player, { side: e.side, stake: (current?.stake ?? 0n) + e.stake })
-        if (e.side === 0) r.poolUp += e.stake
-        else r.poolDown += e.stake
+        const current = r.bettors.get(e.player) ?? { up: 0n, down: 0n }
+        if (e.side === 0) {
+          r.bettors.set(e.player, { ...current, up: current.up + e.stake })
+          r.poolUp += e.stake
+        } else {
+          r.bettors.set(e.player, { ...current, down: current.down + e.stake })
+          r.poolDown += e.stake
+        }
       }
       break
     }
     case 'freeze': {
       const r = rounds[Number(a[0])]!
       r.status = 1
-      if (r.kind === 1) r.threshold = Math.floor((r.bettors.size * TICKS * THRESHOLD_PCT) / 100)
+      if (r.kind === 1) r.threshold = Math.floor((players.length * TICKS * THRESHOLD_PCT) / 100)
       break
     }
     case 'resolveByPrice': {

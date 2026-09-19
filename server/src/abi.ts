@@ -1,4 +1,4 @@
-// Generated from contracts/out/Auramaxx.sol/Auramaxx.json — do not edit by hand.
+// Generated from contracts/out/Auramaxx.sol/Auramaxx.json - do not edit by hand.
 export const AURAMAXX_ABI = [
  {
   "type": "constructor",
@@ -76,6 +76,35 @@ export const AURAMAXX_ABI = [
     "name": "",
     "type": "uint8",
     "internalType": "uint8"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "betsOf",
+  "inputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "",
+    "type": "uint16",
+    "internalType": "uint16"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "up",
+    "type": "uint128",
+    "internalType": "uint128"
+   },
+   {
+    "name": "down",
+    "type": "uint128",
+    "internalType": "uint128"
    }
   ],
   "stateMutability": "view"
@@ -652,54 +681,6 @@ export const AURAMAXX_ABI = [
   ],
   "outputs": [],
   "stateMutability": "nonpayable"
- },
- {
-  "type": "function",
-  "name": "sideOf",
-  "inputs": [
-   {
-    "name": "",
-    "type": "uint256",
-    "internalType": "uint256"
-   },
-   {
-    "name": "",
-    "type": "uint16",
-    "internalType": "uint16"
-   }
-  ],
-  "outputs": [
-   {
-    "name": "",
-    "type": "uint8",
-    "internalType": "uint8"
-   }
-  ],
-  "stateMutability": "view"
- },
- {
-  "type": "function",
-  "name": "stakeOf",
-  "inputs": [
-   {
-    "name": "",
-    "type": "uint256",
-    "internalType": "uint256"
-   },
-   {
-    "name": "",
-    "type": "uint16",
-    "internalType": "uint16"
-   }
-  ],
-  "outputs": [
-   {
-    "name": "",
-    "type": "uint128",
-    "internalType": "uint128"
-   }
-  ],
-  "stateMutability": "view"
  },
  {
   "type": "function",

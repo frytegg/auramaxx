@@ -146,7 +146,12 @@ app.register(async (scope) => {
               Number(msg.nonce ?? 0),
               String(msg.sig ?? '') as Hex,
             )
-            sendTo(s, result.ok ? { type: 'bet_ok', staked: result.staked } : { type: 'error', code: result.code })
+            sendTo(
+              s,
+              result.ok
+                ? { type: 'bet_ok', staked: result.staked, up: result.up, down: result.down }
+                : { type: 'error', code: result.code },
+            )
             break
           }
           case 'camera': {

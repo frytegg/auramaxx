@@ -41,7 +41,8 @@ type RoundState = {
   revealsDone: number
   hidden: boolean
   entries: Entry[]
-  stake: Map<Address, { side: Side; total: number }>
+  /** Per player, both legs. The BUDGET caps `up + down`, so hedging spends the same chips. */
+  stake: Map<Address, { up: number; down: number }>
   poolUp: number
   poolDown: number
   threshold: number | null
@@ -148,16 +149,15 @@ export async function bet(
   stake: number,
   nonce: number,
   sig: Hex,
-): Promise<{ ok: true; staked: number } | { ok: false; code: string }> {
+): Promise<{ ok: true; staked: number; up: number; down: number } | { ok: false; code: string }> {
   if (!round || (round.phase !== 'open' && round.phase !== 'reveal')) return { ok: false, code: 'CLOSED' }
   if (!players.has(address)) return { ok: false, code: 'UNKNOWN' }
   if (side !== 0 && side !== 1) return { ok: false, code: 'BAD_SIDE' }
 
-  const current = round.stake.get(address)
-  // add-only: a reveal lets you add to your side, never move to the other one
-  if (current && current.side !== side) return { ok: false, code: 'NO_SWITCH' }
-
-  const room = BUDGET - (current?.total ?? 0)
+  // add-only, but either side is fair game: chips already down cannot move, and the budget is
+  // shared, so backing both sides is a real decision rather than a free hedge
+  const current = round.stake.get(address) ?? { up: 0, down: 0 }
+  const room = BUDGET - (current.up + current.down)
   if (room <= 0) return { ok: false, code: 'BROKE' }
   const amount = Math.min(Math.max(Math.floor(stake), 1), room)
 
@@ -166,11 +166,12 @@ export async function bet(
   if (recovered.toLowerCase() !== address.toLowerCase()) return { ok: false, code: 'BAD_SIG' }
 
   round.entries.push({ player: address, side, stake: amount, nonce, sig })
-  round.stake.set(address, { side, total: (current?.total ?? 0) + amount })
+  const next = side === 0 ? { ...current, up: current.up + amount } : { ...current, down: current.down + amount }
+  round.stake.set(address, next)
   if (side === 0) round.poolUp += amount
   else round.poolDown += amount
 
-  return { ok: true, staked: (current?.total ?? 0) + amount }
+  return { ok: true, staked: next.up + next.down, up: next.up, down: next.down }
 }
 
 // --- the round machine -------------------------------------------------------------------
@@ -293,7 +294,7 @@ export async function settle(): Promise<void> {
 
     await refreshProfits()
     const winner = r.winner
-    r.paid = [...r.stake.values()].filter((s) => s.side === winner).length
+    r.paid = [...r.stake.values()].filter((s) => (winner === 0 ? s.up : s.down) > 0).length
     r.phase = 'resolved'
 
     emit({
@@ -386,7 +387,15 @@ export function snapshot(address?: Address): Record<string, unknown> {
         }
       : null,
     you: you
-      ? { name: you.name, avatar: you.avatar, profit: you.profit, side: staked?.side ?? null, staked: staked?.total ?? 0, budget: BUDGET }
+      ? {
+          name: you.name,
+          avatar: you.avatar,
+          profit: you.profit,
+          up: staked?.up ?? 0,
+          down: staked?.down ?? 0,
+          staked: (staked?.up ?? 0) + (staked?.down ?? 0),
+          budget: BUDGET,
+        }
       : null,
     leaderboard: leaderboard(),
     price: currentPrice(),
@@ -475,8 +484,9 @@ function doReveal(r: RoundState, n: number): void {
     type: 'reveal',
     n,
     roundId: r.id,
-    up_count: [...r.stake.values()].filter((s) => s.side === 0).length,
-    down_count: [...r.stake.values()].filter((s) => s.side === 1).length,
+    // a hedged player is counted on both sides, because they really are on both
+    up_count: [...r.stake.values()].filter((s) => s.up > 0).length,
+    down_count: [...r.stake.values()].filter((s) => s.down > 0).length,
     poolUp: r.poolUp,
     poolDown: r.poolDown,
     mult_up_x100: m.up,

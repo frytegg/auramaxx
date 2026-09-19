@@ -87,7 +87,7 @@ filme cette salle, rien n'est enregistré, rien ne quitte cet ordinateur — seu
 envoyé. »*
 
 **If the room does not play along:** one shout — *"UNDER, what are you doing?"* That is compering,
-not cheating. The line is half of *bettors*, so it scales down, and UNDER winning by suppression
+not cheating. The line is 45% of *registered players*, so it scales with the room, and UNDER winning by suppression
 is loud and funny.
 
 **If the RPC queues:** *"Your bets are all signed and waiting — watch them land at once."* The

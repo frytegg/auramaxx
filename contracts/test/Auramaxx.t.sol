@@ -49,6 +49,12 @@ contract AuramaxxTest is Test {
         id = a.openRound(0, uint64(block.number + 100));
     }
 
+    /// What a player has put on the table this round, both sides together.
+    function _committed(uint256 roundId, uint16 id) internal view returns (uint128) {
+        (uint128 up, uint128 down) = a.betsOf(roundId, id);
+        return up + down;
+    }
+
     /// 1. Pro-rata payout, computed on money, with dust bounded by the number of winners.
     function test_payout_is_pro_rata_and_dust_is_bounded() public {
         uint256 id = _open();
@@ -99,7 +105,7 @@ contract AuramaxxTest is Test {
         es[0] = _entry(PK1, p1, id, 0, 100, 1);
         a.commitBatch(id, es);
         a.commitBatch(id, es); // same nonce again
-        assertEq(a.stakeOf(id, 1), 100, "second commit ignored");
+        assertEq(_committed(id, 1), 100, "second commit ignored");
     }
 
     /// 4. A stake above what is left of the 1,000 is clamped, not reverted.
@@ -109,7 +115,7 @@ contract AuramaxxTest is Test {
         es[0] = _entry(PK1, p1, id, 0, 800, 1);
         es[1] = _entry(PK1, p1, id, 0, 800, 2); // only 200 left
         a.commitBatch(id, es);
-        assertEq(a.stakeOf(id, 1), 1000, "clamped to the 1000 budget");
+        assertEq(_committed(id, 1), 1000, "clamped to the 1000 budget");
     }
 
     /// 5. One bad entry does not destroy the other nineteen.
@@ -120,21 +126,65 @@ contract AuramaxxTest is Test {
         es[1] = _entry(PK2, p1, id, 0, 100, 1); // signed by bob, claims to be alice -> bad sig
         es[2] = _entry(PK3, p3, id, 1, 100, 1);
         a.commitBatch(id, es);
-        assertEq(a.stakeOf(id, 1), 100, "alice went through");
-        assertEq(a.stakeOf(id, 3), 100, "carol went through");
+        assertEq(_committed(id, 1), 100, "alice went through");
+        assertEq(_committed(id, 3), 100, "carol went through");
         assertEq(a.bettorCount(id), 2, "the forged one was skipped");
     }
 
-    /// 6. Add-only: chips can never move to the other side at a reveal.
-    function test_cannot_switch_sides() public {
+    /// 6. Both sides at once: the two legs are stored separately and the 1,000 caps them together.
+    function test_both_sides_are_kept_separately() public {
+        uint256 id = _open();
+        Auramaxx.Entry[] memory es = new Auramaxx.Entry[](3);
+        es[0] = _entry(PK1, p1, id, 0, 100, 1); // UP
+        es[1] = _entry(PK1, p1, id, 1, 300, 2); // and DOWN, in the same round
+        es[2] = _entry(PK1, p1, id, 0, 900, 3); // 600 left, so this one is clamped
+        a.commitBatch(id, es);
+
+        (uint128 up, uint128 down) = a.betsOf(id, 1);
+        assertEq(up, 700, "100 + 600 after the clamp");
+        assertEq(down, 300, "the other leg is untouched");
+        assertEq(up + down, 1000, "the budget caps the two together");
+
+        (Auramaxx.Round memory r,) = a.getRound(id);
+        assertEq(r.poolUp, 700, "both legs reach their pool");
+        assertEq(r.poolDown, 300);
+        assertEq(a.bettorCount(id), 1, "one player, counted once");
+    }
+
+    /// 6bis. A hedged player is paid on the winning leg and loses the other, like everyone else.
+    ///  UP: alice 300 + bob 200 = 500. DOWN: alice 100 + carol 400 = 500. T = 1000, UP wins.
+    ///  alice 300*1000/500 = 600 against 400 committed -> profit 200
+    ///  bob   200*1000/500 = 400 against 200 committed -> profit 200
+    function test_hedged_player_is_paid_on_the_winning_leg_only() public {
+        uint256 id = _open();
+        Auramaxx.Entry[] memory es = new Auramaxx.Entry[](4);
+        es[0] = _entry(PK1, p1, id, 0, 300, 1);
+        es[1] = _entry(PK1, p1, id, 1, 100, 2);
+        es[2] = _entry(PK2, p2, id, 0, 200, 1);
+        es[3] = _entry(PK3, p3, id, 1, 400, 1);
+        a.commitBatch(id, es);
+        a.freeze(id);
+        a.resolveByPrice(id, 100, 101); // UP wins
+
+        (,,, uint96[] memory ps) = a.getPlayers(0, 3);
+        assertEq(ps[0], 200, "alice: 600 back on 400 committed");
+        assertEq(ps[1], 200, "bob: 400 back on 200 committed");
+        assertEq(ps[2], 0, "carol backed the losing side only");
+        assertEq(a.faucetReserve(), 0, "the pools divide exactly here");
+    }
+
+    /// 6ter. Hedging is not free: backing both sides evenly gives the stake back, never a profit.
+    function test_hedging_both_sides_cannot_manufacture_profit() public {
         uint256 id = _open();
         Auramaxx.Entry[] memory es = new Auramaxx.Entry[](2);
-        es[0] = _entry(PK1, p1, id, 0, 100, 1); // UP
-        es[1] = _entry(PK1, p1, id, 1, 100, 2); // tries DOWN
+        es[0] = _entry(PK1, p1, id, 0, 500, 1);
+        es[1] = _entry(PK1, p1, id, 1, 500, 2);
         a.commitBatch(id, es);
-        (Auramaxx.Round memory r,) = a.getRound(id);
-        assertEq(r.poolUp, 100);
-        assertEq(r.poolDown, 0, "side switch refused");
+        a.freeze(id);
+        a.resolveByPrice(id, 100, 101); // UP wins, and alice is the whole book
+
+        (,,, uint96[] memory ps) = a.getPlayers(0, 1);
+        assertEq(ps[0], 0, "1000 in, 1000 out: no profit from hedging");
     }
 
     /// 7bis. Asymmetric pools with real rounding — the case a symmetric test cannot catch.
@@ -178,21 +228,22 @@ contract AuramaxxTest is Test {
         assertGt(downX100, 0, "the phone must never show 0.00x");
     }
 
-    /// 8. The magenta threshold is computed by the contract from the number of bettors.
-    function test_threshold_is_computed_by_the_contract() public {
+    /// 8. The magenta threshold comes from the REGISTERED players, not from who happened to bet.
+    ///    Abstaining must not lower the bar the room has to clear.
+    function test_threshold_counts_registered_players_not_bettors() public {
         uint256 id = a.openRound(1, uint64(block.number + 100));
-        Auramaxx.Entry[] memory es = new Auramaxx.Entry[](3);
-        es[0] = _entry(PK1, p1, id, 0, 100, 1);
-        es[1] = _entry(PK2, p2, id, 1, 100, 1);
-        es[2] = _entry(PK3, p3, id, 0, 100, 1);
+        Auramaxx.Entry[] memory es = new Auramaxx.Entry[](1);
+        es[0] = _entry(PK1, p1, id, 0, 100, 1); // one bettor out of three registered
         a.commitBatch(id, es);
         a.freeze(id);
+
         (Auramaxx.Round memory r,) = a.getRound(id);
-        uint256 expected = (uint256(3) * 11 * 45) / 100; // 14
-        assertEq(uint256(r.threshold), expected, "45% of N*TICKS");
+        assertEq(a.bettorCount(id), 1, "only alice bet");
+        assertEq(uint256(r.threshold), (uint256(3) * 11 * 45) / 100, "45% of registered * TICKS = 14");
+        assertGt(uint256(r.threshold), (uint256(1) * 11 * 45) / 100, "abstaining does not lower the bar");
 
         a.resolveByCount(id, r.threshold + 1); // OVER wins
         (,,, uint96[] memory ps) = a.getPlayers(0, 3);
-        assertGt(ps[0], 0, "over backers paid");
+        assertEq(ps[0], 0, "alice was the whole book: refunded, not enriched");
     }
 }

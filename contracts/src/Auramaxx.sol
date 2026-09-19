@@ -41,10 +41,17 @@ contract Auramaxx {
         uint32 settledCount; // kind 1 only, what the camera saw
     }
 
+    /// @dev Both sides at once, in one storage slot. A player may back OVER and UNDER in the same
+    ///      round: each leg is paid on its own merit, and BUDGET caps the two together, so hedging
+    ///      costs real chips instead of being free.
+    struct Bets {
+        uint128 up;
+        uint128 down;
+    }
+
     Round[] public rounds;
     mapping(uint256 => uint16[]) private bettorIds;
-    mapping(uint256 => mapping(uint16 => uint128)) public stakeOf;
-    mapping(uint256 => mapping(uint16 => uint8)) public sideOf;
+    mapping(uint256 => mapping(uint16 => Bets)) public betsOf;
     mapping(uint256 => uint16) public paidUpTo; // resolveChunk cursor
 
     address public immutable operator;
@@ -157,23 +164,24 @@ contract Auramaxx {
         if (e.nonce <= p.nonce) return; // replay
         if (!_verify(roundId, e)) return;
 
-        uint128 already = stakeOf[roundId][id];
-        // add-only: once you have a side you cannot move chips to the other one
-        if (already > 0 && sideOf[roundId][id] != e.side) return;
+        Bets storage b = betsOf[roundId][id];
+        uint128 committed = b.up + b.down;
 
-        uint128 room = BUDGET - already; // BUDGET is fresh every round
+        // add-only, but both sides are allowed: the cap is on the two together, not on one
+        uint128 room = BUDGET - committed; // BUDGET is fresh every round
         if (room == 0) return;
         uint128 stake = e.stake > room ? room : e.stake; // clamp, never revert
 
         p.nonce = e.nonce;
-        if (already == 0) {
-            bettorIds[roundId].push(id);
-            sideOf[roundId][id] = e.side;
-        }
-        stakeOf[roundId][id] = already + stake;
+        if (committed == 0) bettorIds[roundId].push(id);
 
-        if (e.side == UP) r.poolUp += stake;
-        else r.poolDown += stake;
+        if (e.side == UP) {
+            b.up += stake;
+            r.poolUp += stake;
+        } else {
+            b.down += stake;
+            r.poolDown += stake;
+        }
 
         emit Bet(roundId, id, e.side, stake, r.poolUp + r.poolDown);
     }
@@ -198,13 +206,17 @@ contract Auramaxx {
     }
 
     /// @notice Locks betting and, for a magenta round, computes the threshold from the number of
-    ///         players who actually bet. The operator never chooses it.
+    ///         REGISTERED players. The operator never chooses it, and cannot: the only input is a
+    ///         count this contract keeps itself.
+    /// @dev Deliberately not the number of connected players. The chain cannot observe who has a
+    ///      socket open, so that number would have to be submitted by the backend — which would
+    ///      hand the operator exactly the lever this design exists to remove.
     function freeze(uint256 roundId) external onlyOperator {
         Round storage r = rounds[roundId];
         if (r.status != 0) revert BadState();
         r.status = 1;
         if (r.kind == 1) {
-            r.threshold = uint32((bettorIds[roundId].length * TICKS * THRESHOLD_PCT) / 100);
+            r.threshold = uint32((players.length * TICKS * THRESHOLD_PCT) / 100);
         }
         emit RoundFrozen(roundId, r.poolUp, r.poolDown, r.threshold);
     }
@@ -249,16 +261,13 @@ contract Auramaxx {
 
         for (uint16 i = from; i < end;) {
             uint16 id = list[i];
-            uint128 stake = stakeOf[roundId][id];
-            uint128 payout;
-
-            if (pw == 0) {
-                payout = stake; // nobody backed the winning side: full refund, never divide by zero
-            } else if (sideOf[roundId][id] == r.winner) {
-                payout = uint128((uint256(stake) * total) / pw); // multiply before divide
-            } else {
-                payout = 0;
-            }
+            Bets storage b = betsOf[roundId][id];
+            uint128 stake = b.up + b.down; // what the player committed, across both sides
+            // only the winning leg pays; the other is lost like any other bet. pw == 0 means
+            // nobody backed the winner, so everything committed comes back — never a divide by zero.
+            uint128 payout = pw == 0
+                ? stake
+                : uint128((uint256(r.winner == UP ? b.up : b.down) * total) / pw); // multiply before divide
 
             if (payout > stake) {
                 uint96 gain = uint96(payout - stake);

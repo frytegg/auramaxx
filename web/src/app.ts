@@ -1,5 +1,6 @@
 /**
- * The phone. One page, two taps to play: pick a side, pick an amount.
+ * The phone. One page, two taps to play: pick a side, pick an amount. Both sides are allowed in
+ * the same round — the 1,000 AURA budget is shared between them, so hedging costs real chips.
  *
  * The key lives in localStorage and never leaves the phone: every bet is signed here, the
  * backend only relays it and pays the gas. That is why the operator cannot bet for you.
@@ -42,8 +43,10 @@ let config: { contract: Address; chainId: number } | null = null
 let socket: WebSocket | null = null
 let round: Round | null = null
 let selectedSide: 0 | 1 | null = null
+// what is already committed, per side; `myStake` is the two together and the budget caps that sum
+let myUp = 0
+let myDown = 0
 let myStake = 0
-let mySide: 0 | 1 | null = null
 let aura = 1000
 let nonce = Number(localStorage.getItem('auramaxx.nonce') ?? '0')
 let avatar = Number(localStorage.getItem('auramaxx.avatar') ?? '0')
@@ -132,7 +135,7 @@ $('sideUp').addEventListener('click', () => selectSide(0))
 $('sideDown').addEventListener('click', () => selectSide(1))
 
 function selectSide(side: 0 | 1): void {
-  if (mySide !== null && mySide !== side) return // add-only, never switch
+  // either side, any time: chips already down never move, but new ones can go anywhere
   selectedSide = side
   $('sideUp').classList.toggle('sel', side === 0)
   $('sideDown').classList.toggle('sel', side === 1)
@@ -140,22 +143,30 @@ function selectSide(side: 0 | 1): void {
 }
 
 function updateStatus(): void {
-  const sideName = (s: 0 | 1 | null): string =>
-    s === null ? '' : s === 0 ? 'OVER' : 'UNDER'
-  if (myStake > 0) {
-    $('statusText').textContent = `${sideName(mySide)} · ${myStake} AURA misés · reste ${1000 - myStake}`
+  const sideName = (s: 0 | 1 | null): string => (s === null ? '' : s === 0 ? 'OVER' : 'UNDER')
+  const left = 1000 - myStake
+
+  if (myUp > 0 && myDown > 0) {
+    $('statusText').textContent = `OVER ${myUp} · UNDER ${myDown} · reste ${left}`
+  } else if (myStake > 0) {
+    $('statusText').textContent = `${sideName(myUp > 0 ? 0 : 1)} · ${myStake} AURA misés · reste ${left}`
   } else if (selectedSide !== null) {
     $('statusText').textContent = `${sideName(selectedSide)} — choisis ta mise`
   } else {
     $('statusText').textContent = 'choisis un camp'
   }
+
+  // each side shows what YOU have on it, so a split bet is readable at a glance
+  $('upMine').textContent = myUp > 0 ? `tu as ${myUp}` : ''
+  $('downMine').textContent = myDown > 0 ? `tu as ${myDown}` : ''
+  $('sideUp').classList.toggle('mine', myUp > 0)
+  $('sideDown').classList.toggle('mine', myDown > 0)
+
   for (const button of document.querySelectorAll<HTMLButtonElement>('.stakes button')) {
     const raw = button.dataset.stake
-    const value = raw === 'all' ? 1000 - myStake : Number(raw)
-    button.disabled = selectedSide === null || value <= 0 || value > 1000 - myStake || !canBet()
+    const value = raw === 'all' ? left : Number(raw)
+    button.disabled = selectedSide === null || value <= 0 || value > left || !canBet()
   }
-  $('sideUp').classList.toggle('locked', mySide === 1)
-  $('sideDown').classList.toggle('locked', mySide === 0)
 }
 
 function canBet(): boolean {
@@ -225,10 +236,11 @@ function handle(msg: Record<string, unknown>): void {
       manche = Number(msg.manche ?? manche)
       const you = msg.you as Record<string, unknown> | null
       if (you) {
-        aura = Number(you.budget ?? 1000) - Number(you.staked ?? 0)
-        myStake = Number(you.staked ?? 0)
-        mySide = you.side === null || you.side === undefined ? null : (Number(you.side) as 0 | 1)
-        if (mySide !== null) selectedSide = mySide
+        myUp = Number(you.up ?? 0)
+        myDown = Number(you.down ?? 0)
+        myStake = myUp + myDown
+        aura = Number(you.budget ?? 1000) - myStake
+        if (selectedSide === null && myStake > 0) selectedSide = myUp >= myDown ? 0 : 1
         $('meAura').textContent = String(aura)
         $('meName').textContent = String(you.name ?? '')
         $('meAvatar').textContent = AVATARS[Number(you.avatar ?? 0)] ?? '🦊'
@@ -245,8 +257,9 @@ function handle(msg: Record<string, unknown>): void {
         hidden: true,
         durationMs: Number(msg.durationMs ?? 30000),
       }
+      myUp = 0
+      myDown = 0
       myStake = 0
-      mySide = null
       selectedSide = null
       $('sideUp').classList.remove('sel')
       $('sideDown').classList.remove('sel')
@@ -289,8 +302,9 @@ function handle(msg: Record<string, unknown>): void {
       break
     }
     case 'bet_ok': {
-      myStake = Number(msg.staked ?? myStake)
-      mySide = selectedSide
+      myUp = Number(msg.up ?? myUp)
+      myDown = Number(msg.down ?? myDown)
+      myStake = Number(msg.staked ?? myUp + myDown)
       aura = 1000 - myStake
       $('meAura').textContent = String(aura)
       setTick('seen')
@@ -301,7 +315,6 @@ function handle(msg: Record<string, unknown>): void {
     case 'error': {
       const codes: Record<string, string> = {
         CLOSED: 'trop tard, les paris sont fermés',
-        NO_SWITCH: 'on ne change pas de camp, on peut seulement ajouter',
         BROKE: 'tu as déjà tout misé',
         BAD_SIG: 'signature refusée',
         NOT_JOINED: 'reconnecte-toi',
@@ -313,10 +326,15 @@ function handle(msg: Record<string, unknown>): void {
     case 'resolved': {
       leaveMagenta()
       const winner = Number(msg.winner) as 0 | 1
-      const won = mySide === winner && myStake > 0
+      const onWinner = winner === 0 ? myUp : myDown
+      const onLoser = winner === 0 ? myDown : myUp
+      const won = onWinner > 0
       const you = msg.you as Record<string, unknown> | undefined
-      $('resultBig').textContent = myStake === 0 ? '—' : won ? 'GAGNÉ' : 'PERDU'
-      $('resultBig').style.color = myStake === 0 ? '#888' : won ? 'var(--up)' : 'var(--down)'
+      // a hedged player has won something and lost something: say so rather than pick a side
+      const verdict = myStake === 0 ? '—' : !won ? 'PERDU' : onLoser > 0 ? 'PARTAGÉ' : 'GAGNÉ'
+      $('resultBig').textContent = verdict
+      $('resultBig').style.color =
+        myStake === 0 ? '#888' : verdict === 'GAGNÉ' ? 'var(--up)' : verdict === 'PARTAGÉ' ? 'var(--gold)' : 'var(--down)'
       const label = winner === 0 ? 'OVER' : 'UNDER'
       $('resultSub').textContent = `${label} · ${String(msg.count ?? 0)} écrans comptés, seuil ${String(msg.threshold ?? 0)} · manche ${manche}/2`
       renderBoard(msg.leaderboard as Array<Record<string, unknown>>, Number(you?.profit ?? 0))
