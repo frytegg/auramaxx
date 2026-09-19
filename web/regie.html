@@ -1,115 +1,399 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AURAMAXX — Régie</title>
+    <meta name="theme-color" content="#0B0710" />
+    <title>AURAMAXX — Console</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;600;700&display=swap" />
     <style>
-      /* design: frontend/operateur/index.html — wired to the server's /op/* routes */
+      /* A market page, not a dashboard: the round is the market, the controls are the ticket. */
       :root {
         color-scheme: dark;
-        --bg: #0B0710; --surface: #14101A; --border: #2C1E34; --magenta: #FF2E9E; --green: #35E28C;
-        --red: #FF4D6A; --text: #F8F3F7; --text-dim: #AE9AB2; --text-faint: #7A6A7E;
+        --bg: #0B0710;
+        --surface: #140F19;
+        --surface-2: #1B1522;
+        --surface-3: #241C2C;
+        --border: #2A2031;
+        --border-strong: #3B2E44;
+        --text: #F6F1F5;
+        --muted: #A493A8;
+        --faint: #6F6275;
+        --magenta: #FF2E9E;
+        --magenta-deep: #B8156C;
+        --over: #35E28C;
+        --over-deep: #1E9E5E;
+        --over-soft: rgba(53, 226, 140, 0.12);
+        --under: #FF4D6A;
+        --under-soft: rgba(255, 77, 106, 0.12);
+        --amber: #FFB547;
       }
       * { box-sizing: border-box; margin: 0; padding: 0; }
-      body { background: var(--bg); color: var(--text); font-family: 'Space Grotesk', system-ui, sans-serif; min-height: 100vh; }
-      .wrap { max-width: 1280px; margin: 0 auto; padding: 28px 32px; display: flex; flex-direction: column; gap: 24px; }
-      header { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
-      .title { font-family: 'Anton', sans-serif; font-size: 28px; letter-spacing: 2px; color: var(--magenta); }
-      .pill {
-        display: inline-flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border);
-        border-radius: 999px; padding: 8px 16px; font-size: 14px; color: var(--text-dim);
+      body {
+        background: var(--bg); color: var(--text); min-height: 100vh;
+        font: 15px/1.45 'Space Grotesk', system-ui, sans-serif; -webkit-font-smoothing: antialiased;
       }
-      .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); }
-      .dot.on { background: var(--green); }
-      .grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 24px; }
-      @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
-      .card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 26px; display: flex; flex-direction: column; gap: 16px; }
-      .label { font-size: 13px; letter-spacing: 2px; color: var(--text-dim); text-transform: uppercase; }
-      .time { font-family: 'Anton', sans-serif; font-size: 64px; font-variant-numeric: tabular-nums; }
-      .phase { font-family: 'Anton', sans-serif; font-size: 22px; letter-spacing: .08em; color: var(--magenta); }
-      .row { display: flex; gap: 10px; flex-wrap: wrap; }
-      .btn {
-        flex: 1; min-width: 150px; text-align: left; padding: 16px 18px; border-radius: 14px; border: 2px solid var(--border);
-        font: 600 15px 'Space Grotesk', sans-serif; cursor: pointer; background: transparent; color: var(--text); transition: all .15s ease;
+      button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+      button:disabled { cursor: default; }
+      a { color: inherit; text-decoration: none; }
+      [hidden] { display: none !important; }
+      .num { font-variant-numeric: tabular-nums; }
+
+      /* --- top bar ---------------------------------------------------------------------- */
+      .topbar { position: sticky; top: 0; z-index: 10; background: rgba(11, 7, 16, 0.9); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); }
+      .bar { max-width: 1320px; margin: 0 auto; padding: 14px 28px 10px; display: flex; align-items: center; gap: 22px; }
+      .logo { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+      .logo .word { font-family: 'Anton', sans-serif; font-size: 25px; letter-spacing: 1.5px; color: var(--magenta); }
+      .logo .badge { font-size: 12px; font-weight: 600; color: var(--muted); border: 1px solid var(--border-strong); padding: 2px 8px; border-radius: 6px; }
+      .keybox {
+        flex: 1; max-width: 520px; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 14px;
+        background: var(--surface-2); border: 1px solid transparent; border-radius: 12px; transition: border-color .15s;
       }
-      .btn:hover:not(:disabled) { border-color: var(--magenta); }
-      .btn.next { background: var(--magenta); color: #170013; border-color: var(--magenta); box-shadow: 0 0 20px rgba(255,46,158,.4); }
-      .btn:disabled { opacity: .35; cursor: default; }
-      .pools { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-      .pool { border: 2px solid var(--border); border-radius: 14px; padding: 14px; }
-      .pool .n { font-family: 'Anton', sans-serif; font-size: 30px; font-variant-numeric: tabular-nums; }
-      .pool.up .n { color: var(--green); } .pool.down .n { color: var(--red); }
-      .pool .s { font-size: 13px; color: var(--text-dim); }
-      input {
-        background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 12px; padding: 12px 14px;
-        font: 600 16px 'Space Grotesk', sans-serif; width: 100%;
+      .keybox:focus-within { border-color: var(--border-strong); }
+      .keybox.refused { border-color: var(--under); }
+      .keybox svg { flex: none; color: var(--faint); }
+      .keybox input { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; color: var(--text); font: 500 15px 'Space Grotesk', sans-serif; }
+      .keybox input::placeholder { color: var(--faint); }
+      .keybox .keystate { font-size: 13px; font-weight: 600; white-space: nowrap; color: var(--faint); }
+      .keybox.refused .keystate { color: var(--under); }
+      .keybox.accepted .keystate { color: var(--over); }
+      .stats { margin-left: auto; display: flex; align-items: center; gap: 20px; font-size: 14px; color: var(--muted); white-space: nowrap; }
+      .stats b { color: var(--text); font-weight: 600; }
+      .conn { display: inline-flex; align-items: center; gap: 7px; }
+      .conn i { width: 8px; height: 8px; border-radius: 50%; background: var(--under); }
+      .conn.on i { background: var(--over); box-shadow: 0 0 0 3px rgba(53, 226, 140, 0.18); }
+      .newgame {
+        height: 40px; padding: 0 18px; border-radius: 10px; font-weight: 700; color: #1C0012; background: var(--magenta);
+        box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.22); transition: transform .08s;
       }
-      .log { font-size: 13px; color: var(--text-dim); font-family: ui-monospace, monospace; max-height: 180px; overflow: auto; line-height: 1.6; }
-      .log .err { color: var(--red); }
-      .board div { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 15px; }
-      .links a { color: var(--magenta); font-size: 14px; margin-right: 14px; }
+      .newgame:hover:not(:disabled) { filter: brightness(1.06); }
+      .newgame:active:not(:disabled) { transform: translateY(1px); }
+      .newgame:disabled { opacity: .4; }
+      .topghost { height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--border-strong); font-weight: 600; color: var(--muted); transition: color .15s, border-color .15s; }
+      .topghost:hover:not(:disabled) { color: var(--text); border-color: var(--text); }
+      .topghost:disabled { opacity: .4; }
+      .nav { max-width: 1320px; margin: 0 auto; padding: 0 28px; display: flex; align-items: center; gap: 26px; font-weight: 600; color: var(--muted); }
+      .nav a { padding: 8px 0 11px; border-bottom: 2px solid transparent; transition: color .15s; }
+      .nav a:hover { color: var(--text); }
+      .nav a.on { color: var(--text); border-color: var(--text); }
+      .nav .sep { width: 1px; height: 18px; background: var(--border-strong); }
+      .nav .contract { margin-left: auto; font: 500 13px ui-monospace, 'SFMono-Regular', Menlo, monospace; color: var(--faint); }
+      .nav .contract:hover { color: var(--muted); }
+
+      /* --- page ------------------------------------------------------------------------- */
+      .page { max-width: 1320px; margin: 0 auto; padding: 28px 28px 48px; display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 40px; align-items: start; }
+      @media (max-width: 1040px) { .page { grid-template-columns: 1fr; } .ticket { position: static; } .bar { flex-wrap: wrap; } .stats { margin-left: 0; } }
+
+      /* market header, the way a prediction market states its question */
+      .mhead { display: flex; align-items: center; gap: 20px; }
+      .micon { flex: none; width: 76px; height: 76px; border-radius: 16px; background: var(--magenta); display: grid; place-items: center; }
+      .mtitle { flex: 1; min-width: 0; }
+      .crumbs { display: flex; gap: 8px; font-size: 15px; font-weight: 500; color: var(--muted); }
+      h1 { font-size: 30px; line-height: 1.15; font-weight: 700; letter-spacing: -0.01em; margin-top: 4px; }
+      h1 .line { color: var(--magenta); }
+      .countdown { flex: none; display: flex; gap: 18px; text-align: center; color: var(--faint); }
+      .countdown b { display: block; font-size: 34px; line-height: 1; font-weight: 700; font-variant-numeric: tabular-nums; }
+      .countdown span { display: block; font-size: 11px; font-weight: 700; letter-spacing: .06em; margin-top: 6px; }
+      .countdown.running { color: var(--text); }
+      .countdown.hot { color: var(--magenta); }
+
+      .chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+      .chip {
+        display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 16px; border-radius: 999px;
+        background: var(--surface-2); font-weight: 600; font-size: 15px; color: var(--faint);
+      }
+      .chip.current { color: var(--text); background: var(--surface-3); }
+      .chip.done { color: var(--muted); }
+      .chip .pip { width: 10px; height: 10px; border-radius: 50%; background: var(--faint); }
+      .chip.current .pip { background: var(--magenta); }
+      .chip.current.live .pip { background: var(--under); animation: pulse 1.2s ease-in-out infinite; }
+      .chip.done .pip { background: var(--over); }
+      .chip.status { margin-left: auto; color: var(--muted); background: transparent; border: 1px solid var(--border-strong); }
+      .chip.status.go { color: var(--over); border-color: rgba(53, 226, 140, .4); }
+      .chip.status.live { color: var(--magenta); border-color: rgba(255, 46, 158, .45); }
+      .chip.status.reveal { color: var(--amber); border-color: rgba(255, 181, 71, .45); }
+      @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 77, 106, .55); } 50% { box-shadow: 0 0 0 6px rgba(255, 77, 106, 0); } }
+
+      /* the headline number, like a ticker above a price chart */
+      .ticker { display: flex; align-items: baseline; gap: 14px; margin-top: 26px; }
+      .ticker .what { font-size: 17px; font-weight: 700; }
+      .ticker .count { font-size: 17px; font-weight: 600; color: var(--muted); }
+      .ticker .delta { font-size: 15px; font-weight: 600; }
+      .ticker .delta.over { color: var(--over); }
+      .ticker .delta.under { color: var(--under); }
+      .ticker .src { margin-left: auto; font-size: 13px; color: var(--faint); }
+      .ticker .src.chain { color: var(--over); }
+
+      .chart { position: relative; height: 320px; margin-top: 10px; }
+      .chart svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+      .chart .empty { position: absolute; inset: 24px 64px 30px 0; display: grid; place-items: center; text-align: center; color: var(--faint); font-size: 15px; pointer-events: none; }
+      .chart .empty > div { padding: 14px 20px; border-radius: 12px; background: rgba(11, 7, 16, .85); }
+      .chart .empty b { display: block; color: var(--muted); font-size: 17px; margin-bottom: 4px; }
+      .chart text { font: 600 12px 'Space Grotesk', sans-serif; fill: var(--faint); font-variant-numeric: tabular-nums; }
+      .chart text.rv { fill: var(--amber); }
+      .chart text.tagtxt { fill: #0B0710; font-weight: 700; font-size: 13px; }
+      .chart text.linelbl { fill: var(--text); font-weight: 700; }
+      .chart .now { animation: ring 1.4s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+      @keyframes ring { from { opacity: .7; transform: scale(1); } to { opacity: 0; transform: scale(3); } }
+
+      /* the verdict, once the chain has it */
+      .verdict { display: flex; align-items: center; gap: 16px; margin-top: 22px; padding: 16px 18px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); }
+      .verdict .who { font-family: 'Anton', sans-serif; font-size: 34px; line-height: 1; letter-spacing: 1px; }
+      .verdict .who.over { color: var(--over); }
+      .verdict .who.under { color: var(--under); }
+      .verdict .who.paid { color: var(--magenta); }
+      .verdict .facts { flex: 1; font-size: 15px; color: var(--muted); }
+      .verdict .facts b { color: var(--text); font-weight: 600; }
+      .verdict a.tx { font: 500 13px ui-monospace, 'SFMono-Regular', Menlo, monospace; color: var(--magenta); white-space: nowrap; }
+      .verdict a.tx:hover { text-decoration: underline; }
+
+      /* OVER / UNDER, as the market's two outcomes */
+      .outcomes { margin-top: 26px; border-top: 1px solid var(--border); }
+      .ohead { display: flex; justify-content: space-between; padding: 12px 4px 8px; font-size: 13px; font-weight: 600; color: var(--faint); }
+      .split { height: 6px; border-radius: 999px; background: var(--under); overflow: hidden; margin: 0 4px 8px; opacity: .9; }
+      .split i { display: block; height: 100%; width: 50%; background: var(--over); transition: width .4s ease; }
+      .split.hidden { background: var(--surface-3); }
+      .split.hidden i { width: 0; }
+      .orow { display: grid; grid-template-columns: minmax(0, 1fr) 110px 240px; align-items: center; gap: 16px; padding: 16px 4px; border-bottom: 1px solid var(--border); }
+      .oname { display: flex; align-items: center; gap: 14px; min-width: 0; }
+      .oname .tag { width: 44px; height: 44px; border-radius: 10px; display: grid; place-items: center; font-size: 20px; font-weight: 700; }
+      .over .tag { background: var(--over-soft); color: var(--over); }
+      .under .tag { background: var(--under-soft); color: var(--under); }
+      .oname strong { display: block; font-size: 18px; font-weight: 700; }
+      .oname small { display: block; font-size: 14px; color: var(--faint); }
+      .oprob { font-size: 30px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+      .oside { display: flex; gap: 10px; justify-content: flex-end; }
+      .pill { min-width: 108px; height: 48px; padding: 0 14px; border-radius: 10px; display: grid; place-items: center; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+      .over .pill.mult { background: var(--over-soft); color: var(--over); }
+      .under .pill.mult { background: var(--under-soft); color: var(--under); }
+      .pill.pool { background: var(--surface-2); color: var(--muted); font-weight: 600; }
+      .locked .oprob { color: var(--faint); font-size: 20px; font-weight: 600; }
+      .locked .pill { color: var(--faint) !important; background: var(--surface-2) !important; }
+      .orow .won { display: none; margin-left: 8px; padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: 700; vertical-align: 3px; }
+      .orow.winner .won { display: inline-block; }
+      .over .won { background: var(--over); color: #04210F; }
+      .under .won { background: var(--under); color: #2A0009; }
+      .orow.loser { opacity: .45; }
+      .lockednote { display: flex; align-items: center; gap: 8px; padding: 12px 4px 0; font-size: 14px; color: var(--faint); }
+
+      /* leaderboard / activity, as tabs under the market */
+      .tabs { display: flex; gap: 28px; margin-top: 34px; border-bottom: 1px solid var(--border); }
+      .tab { padding: 0 0 12px; font-size: 17px; font-weight: 700; color: var(--faint); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+      .tab.on { color: var(--text); border-color: var(--text); }
+      .tab .n { font-size: 13px; font-weight: 600; color: var(--faint); margin-left: 6px; }
+      .pane { padding-top: 6px; }
+      .lrow { display: grid; grid-template-columns: 34px 40px minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 11px 4px; border-bottom: 1px solid var(--border); }
+      .lrow .rank { font-weight: 700; color: var(--faint); font-variant-numeric: tabular-nums; }
+      .lrow:nth-child(1) .rank { color: var(--amber); }
+      .lrow .av { width: 36px; height: 36px; border-radius: 50%; background: var(--surface-2); display: grid; place-items: center; font-size: 19px; }
+      .lrow .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .lrow .aura { font-weight: 700; color: var(--over); font-variant-numeric: tabular-nums; text-align: right; }
+      .lrow .aura.zero { color: var(--faint); }
+      .lrow .mon { min-width: 84px; text-align: right; font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+      .blank { padding: 28px 4px; color: var(--faint); }
+      .arow { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 12px; padding: 9px 4px; border-bottom: 1px solid var(--border); font-size: 14px; }
+      .arow time { color: var(--faint); font-variant-numeric: tabular-nums; }
+      .arow.err span { color: var(--under); }
+      .arow.ok span { color: var(--over); }
+
+      /* --- the ticket: what the operator does next ------------------------------------------ */
+      .ticket { position: sticky; top: 124px; }
+      .card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; overflow: hidden; }
+      .thead { display: flex; align-items: center; gap: 14px; padding: 20px 22px; }
+      .ticon { flex: none; width: 48px; height: 48px; border-radius: 10px; background: var(--magenta); display: grid; place-items: center; }
+      .thead .sub { font-size: 14px; color: var(--muted); }
+      .thead .ph { font-size: 17px; font-weight: 700; }
+      .thead .ph.go { color: var(--over); }
+      .thead .ph.live { color: var(--magenta); }
+      .thead .ph.reveal { color: var(--amber); }
+      .progress { padding: 0 22px 18px; border-bottom: 1px solid var(--border); }
+      .segs { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+      .segs i { height: 5px; border-radius: 999px; background: var(--surface-3); }
+      .segs i.done { background: var(--over); }
+      .segs i.now { background: var(--magenta); }
+      .progress .cap { display: flex; justify-content: space-between; margin-top: 8px; font-size: 13px; color: var(--faint); }
+      .tbody { padding: 20px 22px 22px; display: flex; flex-direction: column; gap: 14px; }
+      .next { font-size: 14px; font-weight: 600; color: var(--muted); }
+      .primary {
+        width: 100%; min-height: 58px; padding: 0 18px; border-radius: 12px; font-size: 18px; font-weight: 700; color: #1C0012;
+        background: var(--magenta); box-shadow: inset 0 -4px 0 var(--magenta-deep); transition: transform .08s, filter .15s;
+      }
+      .primary:hover:not(:disabled) { filter: brightness(1.06); }
+      .primary:active:not(:disabled) { transform: translateY(2px); box-shadow: inset 0 -2px 0 var(--magenta-deep); }
+      .primary.pay { background: var(--over); color: #04210F; box-shadow: inset 0 -4px 0 var(--over-deep); }
+      .primary:disabled { background: var(--surface-3); color: var(--muted); box-shadow: none; }
+      .primary.waiting:disabled { color: var(--text); }
+      .hint { font-size: 14px; color: var(--muted); line-height: 1.5; }
+      .rescue { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+      .ghost { height: 46px; padding: 0 8px; border-radius: 10px; border: 1px solid var(--border-strong); font-size: 14px; font-weight: 600; transition: border-color .15s, color .15s; }
+      .ghost:hover:not(:disabled) { border-color: var(--text); }
+      .ghost.stop:not(:disabled) { color: var(--under); border-color: rgba(255, 77, 106, .5); }
+      .ghost.stop:hover:not(:disabled) { border-color: var(--under); }
+      .ghost:disabled { color: var(--faint); border-color: var(--border); opacity: .6; }
+      .label { font-size: 14px; font-weight: 600; color: var(--muted); }
+      hr { border: 0; border-top: 1px solid var(--border); margin: 4px 0; }
+      .amount { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+      .amount label { font-size: 18px; font-weight: 700; }
+      .amount input {
+        width: 150px; background: transparent; border: 0; outline: 0; text-align: right; color: var(--text);
+        font: 700 34px 'Space Grotesk', sans-serif; font-variant-numeric: tabular-nums; -moz-appearance: textfield;
+      }
+      .amount input::-webkit-outer-spin-button, .amount input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+      .bumps { display: flex; gap: 8px; justify-content: flex-end; }
+      .bumps button { height: 36px; padding: 0 12px; border-radius: 9px; border: 1px solid var(--border-strong); font-size: 14px; font-weight: 600; color: var(--muted); }
+      .bumps button:hover { color: var(--text); border-color: var(--text); }
+      .send { height: 48px; border-radius: 12px; background: var(--surface-3); font-weight: 700; transition: background .15s; }
+      .send:hover:not(:disabled) { background: var(--border-strong); }
+      .send:disabled { color: var(--faint); }
+      .fine { margin-top: 14px; padding: 0 8px; font-size: 13px; line-height: 1.5; color: var(--faint); text-align: center; }
     </style>
   </head>
   <body>
-    <div class="wrap">
-      <header>
-        <span class="title">AURAMAXX — Régie</span>
-        <span class="pill"><span class="dot" id="conn"></span><span id="players">0 joueur connecté</span></span>
-      </header>
-
-      <div class="grid">
-        <section class="card">
-          <span class="label" id="mancheLabel">Manche —/2</span>
-          <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px">
-            <span class="time" id="time">—:—</span>
-            <span class="phase" id="phase">EN ATTENTE</span>
-          </div>
-          <div class="pools">
-            <div class="pool up"><div class="s">OVER</div><div class="n" id="poolUp">caché</div></div>
-            <div class="pool down"><div class="s">UNDER</div><div class="n" id="poolDown">caché</div></div>
-          </div>
-          <span class="label">Avant le chrono</span>
-          <div class="row">
-            <button class="btn" data-op="open" id="openBtn">1 · Ouvrir les paris — manche 1</button>
-            <button class="btn" data-op="start">2 · Lancer le chrono (45 s)</button>
-          </div>
-          <span style="font-size:12px; color:var(--text-faint)">Pendant les 45 s tout est automatique : magenta, reveals à 15 s et 30 s (5 s de paris), fin et résolution à 45 s.</span>
-          <span class="label">Secours</span>
-          <div class="row">
-            <button class="btn" data-op="freeze">Arrêter le chrono maintenant</button>
-            <button class="btn" data-op="settle">Résoudre (si l'auto a échoué)</button>
-          </div>
-          <span class="label">Fin du jeu</span>
-          <div class="row">
-            <button class="btn" data-op="payout">3 · Payer tout le monde en MON</button>
-          </div>
-          <span class="label">Répétition</span>
-          <div class="row">
-            <button class="btn" data-op="reset">Retour à la landing page</button>
-          </div>
-          <span style="font-size:12px; color:var(--text-faint)">Remet le projecteur sur « Start a game ». Les joueurs inscrits et leurs gains restent : ils vivent dans le contrat.</span>
-        </section>
-
-        <section class="card">
-          <span class="label">Clé régie</span>
-          <input id="key" type="password" placeholder="OP_KEY" autocomplete="off" />
-          <span class="label">Compte caméra (round magenta)</span>
-          <div class="row">
-            <input id="count" type="number" min="0" value="0" style="flex:1" />
-            <button class="btn" id="setCount" style="flex:0 0 auto; min-width:0">Envoyer</button>
-          </div>
-          <span style="font-size:12px; color:var(--text-faint)">Normalement envoyé par la page caméra ; utile en démo sans caméra.</span>
-          <span class="label">Classement</span>
-          <div class="board" id="board"></div>
-          <span class="label">Journal</span>
-          <div class="log" id="log"></div>
-          <div class="links"><a href="/" target="_blank">Téléphone ↗</a><a href="/screen.html" target="_blank">Projecteur ↗</a><a href="/calibrate.html" target="_blank">Caméra ↗</a></div>
-        </section>
+    <header class="topbar">
+      <div class="bar">
+        <div class="logo"><span class="word">AURAMAXX</span><span class="badge">Console</span></div>
+        <label class="keybox" id="keybox">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5" /><path d="M10.7 12.3 21 2M17 6l3 3M14.5 8.5l2.5 2.5" /></svg>
+          <input id="key" type="password" placeholder="Operator key" autocomplete="off" spellcheck="false" />
+          <span class="keystate" id="keystate"></span>
+        </label>
+        <div class="stats">
+          <span class="conn" id="conn"><i></i><span id="connText">Offline</span></span>
+          <span><b class="num" id="players">0</b> players</span>
+          <span>Relayer <b class="num" id="relayer">—</b></span>
+          <button class="topghost" id="resetGame" title="Puts the projector back on the landing page. Players and their profits stay: they live in the contract.">Back to landing</button>
+          <button class="newgame" id="newGame" title="Opens a lobby: the projector shows the join QR.">New game</button>
+        </div>
       </div>
-    </div>
+      <nav class="nav">
+        <a class="on" href="/regie.html">Console</a>
+        <span class="sep"></span>
+        <a href="/screen.html" target="_blank" rel="noopener">Projector ↗</a>
+        <a href="/calibrate.html" target="_blank" rel="noopener">Camera ↗</a>
+        <a href="/" target="_blank" rel="noopener">Phone ↗</a>
+        <a class="contract" id="contract" target="_blank" rel="noopener"></a>
+      </nav>
+    </header>
+
+    <main class="page">
+      <section>
+        <div class="mhead">
+          <div class="micon" aria-hidden="true">
+            <svg width="44" height="44" viewBox="0 0 48 48" fill="none">
+              <rect x="16" y="9" width="16" height="30" rx="4" fill="#fff" />
+              <rect x="19" y="13" width="10" height="20" rx="1.5" fill="#FF2E9E" />
+              <path d="M8 13l4 2.5M5.5 24h5M8 35l4-2.5M40 13l-4 2.5M42.5 24h-5M40 35l-4-2.5" stroke="#fff" stroke-width="2.6" stroke-linecap="round" />
+            </svg>
+          </div>
+          <div class="mtitle">
+            <div class="crumbs"><span>Magenta round</span><span>·</span><span id="crumbRound">No round yet</span></div>
+            <h1 id="title">Open betting to start round 1</h1>
+          </div>
+          <div class="countdown" id="countdown">
+            <div><b id="cdMin">00</b><span>MIN</span></div>
+            <div><b id="cdSec">45</b><span>SEC</span></div>
+          </div>
+        </div>
+
+        <div class="chips">
+          <span class="chip" id="chip1"><span class="pip"></span>Round 1</span>
+          <span class="chip" id="chip2"><span class="pip"></span>Round 2</span>
+          <span class="chip status" id="status">Waiting</span>
+        </div>
+
+        <div class="ticker">
+          <span class="what">Light-ups</span>
+          <span class="count num" id="tickerCount">—</span>
+          <span class="delta num" id="delta"></span>
+          <span class="src" id="lineSrc"></span>
+        </div>
+        <div class="chart" id="chart">
+          <svg id="chartSvg" aria-label="Light-ups over the round"></svg>
+          <div class="empty" id="chartEmpty"><div><b>The line starts with the clock</b>Every light-up the camera counts lands here, against the line.</div></div>
+        </div>
+
+        <div class="verdict" id="verdict" hidden>
+          <div class="who" id="verdictWho"></div>
+          <div class="facts" id="verdictFacts"></div>
+          <a class="tx" id="verdictTx" target="_blank" rel="noopener"></a>
+        </div>
+
+        <div class="outcomes" id="outcomes">
+          <div class="ohead"><span>Outcome</span><span id="potTotal">Pot hidden</span></div>
+          <div class="split hidden" id="split"><i id="splitOver"></i></div>
+          <div class="orow over" id="rowOver">
+            <div class="oname"><span class="tag">↑</span><div><strong>OVER<span class="won">WON</span></strong><small id="overSub">More light-ups than the line</small></div></div>
+            <div class="oprob" id="overProb">—</div>
+            <div class="oside"><span class="pill mult" id="overMult">—</span><span class="pill pool" id="overPool">—</span></div>
+          </div>
+          <div class="orow under" id="rowUnder">
+            <div class="oname"><span class="tag">↓</span><div><strong>UNDER<span class="won">WON</span></strong><small id="underSub">The line or fewer</small></div></div>
+            <div class="oprob" id="underProb">—</div>
+            <div class="oside"><span class="pill mult" id="underMult">—</span><span class="pill pool" id="underPool">—</span></div>
+          </div>
+          <div class="lockednote" id="lockedNote">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+            Pools stay hidden until each reveal. The server withholds them from this console too.
+          </div>
+        </div>
+
+        <div class="tabs" role="tablist">
+          <button class="tab on" data-tab="board" role="tab">Leaderboard</button>
+          <button class="tab" data-tab="activity" role="tab">Activity<span class="n num" id="activityCount"></span></button>
+        </div>
+        <div class="pane" id="pane-board"><div id="board"></div></div>
+        <div class="pane" id="pane-activity" hidden><div id="log"></div></div>
+      </section>
+
+      <aside class="ticket">
+        <div class="card">
+          <div class="thead">
+            <div class="ticon" aria-hidden="true">
+              <svg width="28" height="28" viewBox="0 0 48 48" fill="none">
+                <rect x="16" y="9" width="16" height="30" rx="4" fill="#fff" />
+                <rect x="19" y="13" width="10" height="20" rx="1.5" fill="#FF2E9E" />
+              </svg>
+            </div>
+            <div>
+              <div class="sub" id="ticketRound">No round yet</div>
+              <div class="ph" id="ticketPhase">Waiting</div>
+            </div>
+          </div>
+          <div class="progress">
+            <div class="segs" id="segs"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <div class="cap"><span>Round 1</span><span>Round 2</span><span>Payout</span></div>
+          </div>
+          <div class="tbody">
+            <div class="next" id="stepLabel">Next</div>
+            <button class="primary" id="primary">Open betting · Round 1</button>
+            <p class="hint" id="hint"></p>
+            <hr />
+            <div class="label">If something goes wrong</div>
+            <div class="rescue">
+              <button class="ghost stop" data-op="freeze">Stop clock</button>
+              <button class="ghost" data-op="settle">Retry settle</button>
+              <button class="ghost" data-op="payout">Pay out now</button>
+            </div>
+            <hr />
+            <div class="amount">
+              <label for="countIn">Camera count</label>
+              <input id="countIn" type="number" inputmode="numeric" min="0" step="1" value="0" />
+            </div>
+            <div class="bumps">
+              <button data-bump="-1">−1</button>
+              <button data-bump="1">+1</button>
+              <button data-bump="5">+5</button>
+              <button data-bump="10">+10</button>
+              <button data-bump="0">Zero</button>
+            </div>
+            <button class="send" id="sendCount">Send count</button>
+          </div>
+        </div>
+        <p class="fine">Manual count is for rehearsals or a dead camera. While the camera page runs, it overwrites this four times a second.</p>
+      </aside>
+    </main>
+
     <script type="module" src="/src/regie.ts"></script>
   </body>
 </html>
