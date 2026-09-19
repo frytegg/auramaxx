@@ -702,6 +702,19 @@ export const AURAMAXX_ABI = [
   "stateMutability": "view"
  },
  {
+  "type": "function",
+  "name": "sweep",
+  "inputs": [
+   {
+    "name": "to",
+    "type": "address",
+    "internalType": "address payable"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
   "type": "event",
   "name": "Bet",
   "inputs": [

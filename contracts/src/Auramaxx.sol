@@ -349,9 +349,20 @@ contract Auramaxx {
     function mult(uint256 roundId) external view returns (uint32 upX100, uint32 downX100) {
         Round storage r = rounds[roundId];
         uint256 total = uint256(r.poolUp) + uint256(r.poolDown);
-        if (total == 0) return (200, 200);
-        upX100 = r.poolUp == 0 ? uint32((100 * (total + 2)) / 1) : uint32((100 * total) / r.poolUp);
-        downX100 = r.poolDown == 0 ? uint32((100 * (total + 2)) / 1) : uint32((100 * total) / r.poolDown);
+        // paper §3: exact T/P_i once a side has money; the regularised (T+k)/(P_i+1) with k=2
+        // is a cosmetic seed for an empty side, never stored, and it keeps the display defined.
+        upX100 = r.poolUp == 0
+            ? uint32((100 * (total + 2)) / (uint256(r.poolUp) + 1))
+            : uint32((100 * total) / r.poolUp);
+        downX100 = r.poolDown == 0
+            ? uint32((100 * (total + 2)) / (uint256(r.poolDown) + 1))
+            : uint32((100 * total) / r.poolDown);
+    }
+
+    /// @notice Recover the MON float, so redeploying during the build never strands it.
+    function sweep(address payable to) external onlyOperator {
+        (bool ok,) = to.call{value: address(this).balance}("");
+        require(ok, "sweep failed");
     }
 
     function setRelayer(address a) external onlyOperator {

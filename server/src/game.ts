@@ -372,12 +372,18 @@ function chunk<T>(items: T[], size: number): T[][] {
   return out
 }
 
-function multipliers(r: RoundState): { up: number; down: number } {
+/**
+ * Must match Auramaxx.mult() exactly — the phone and the contract cannot disagree about odds.
+ * paper §3: exact T/P_i once a side has money, regularised (T+k)/(P_i+1) with k=2 when it is
+ * empty (cosmetic, never stored). An empty side means a refund if it wins, so the UI shows
+ * anything above 99x as ">99x" rather than a number that looks broken.
+ */
+export function multipliers(r: { poolUp: number; poolDown: number }): { up: number; down: number } {
   const total = r.poolUp + r.poolDown
   if (total === 0) return { up: 200, down: 200 }
   return {
-    up: r.poolUp === 0 ? 0 : Math.floor((100 * total) / r.poolUp),
-    down: r.poolDown === 0 ? 0 : Math.floor((100 * total) / r.poolDown),
+    up: r.poolUp === 0 ? Math.floor((100 * (total + 2)) / 1) : Math.floor((100 * total) / r.poolUp),
+    down: r.poolDown === 0 ? Math.floor((100 * (total + 2)) / 1) : Math.floor((100 * total) / r.poolDown),
   }
 }
 

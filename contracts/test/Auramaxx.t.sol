@@ -137,7 +137,48 @@ contract AuramaxxTest is Test {
         assertEq(r.poolDown, 0, "side switch refused");
     }
 
-    /// 7. The magenta threshold is computed by the contract from the number of bettors.
+    /// 7bis. Asymmetric pools with real rounding — the case a symmetric test cannot catch.
+    ///  UP: alice 100 + bob 150 = 250. DOWN: carol 251. T = 501, UP wins.
+    ///  alice 100*501/250 = 200.4 -> 200 (profit 100)
+    ///  bob   150*501/250 = 300.6 -> 300 (profit 150)
+    ///  paid 500, dust 1, and dust must be strictly less than the number of winners.
+    function test_asymmetric_payout_and_real_dust() public {
+        uint256 id = _open();
+        Auramaxx.Entry[] memory es = new Auramaxx.Entry[](3);
+        es[0] = _entry(PK1, p1, id, 0, 100, 1);
+        es[1] = _entry(PK2, p2, id, 0, 150, 1);
+        es[2] = _entry(PK3, p3, id, 1, 251, 1);
+        a.commitBatch(id, es);
+
+        (uint32 upX100, uint32 downX100) = a.mult(id);
+        assertEq(uint256(upX100), (uint256(100) * 501) / 250, "up multiplier 2.00x");
+        assertEq(uint256(downX100), (uint256(100) * 501) / 251, "down multiplier 1.99x");
+
+        a.freeze(id);
+        a.resolveByPrice(id, 100, 101); // UP wins
+
+        (,,, uint96[] memory ps) = a.getPlayers(0, 3);
+        assertEq(ps[0], 100, "alice profit 200-100");
+        assertEq(ps[1], 150, "bob profit 300-150");
+        assertEq(ps[2], 0, "carol lost");
+        assertEq(a.faucetReserve(), 1, "exactly 1 chip of dust");
+        assertLt(a.faucetReserve(), 2, "dust is bounded by the winner count");
+    }
+
+    /// 7ter. An empty side must display a defined multiplier, never zero and never a revert.
+    function test_empty_side_multiplier_is_defined() public {
+        uint256 id = _open();
+        Auramaxx.Entry[] memory es = new Auramaxx.Entry[](1);
+        es[0] = _entry(PK1, p1, id, 0, 400, 1); // everyone on UP
+        a.commitBatch(id, es);
+
+        (uint32 upX100, uint32 downX100) = a.mult(id);
+        assertEq(uint256(upX100), (uint256(100) * 400) / 400, "1.00x when you are the whole pool");
+        assertEq(uint256(downX100), (uint256(100) * (400 + 2)) / 1, "regularised, not zero");
+        assertGt(downX100, 0, "the phone must never show 0.00x");
+    }
+
+    /// 8. The magenta threshold is computed by the contract from the number of bettors.
     function test_threshold_is_computed_by_the_contract() public {
         uint256 id = a.openRound(1, uint64(block.number + 100));
         Auramaxx.Entry[] memory es = new Auramaxx.Entry[](3);
