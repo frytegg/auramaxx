@@ -147,7 +147,8 @@ function updateStatus(): void {
   } else if (selectedSide !== null) {
     $('statusText').textContent = `${sideName(selectedSide)} — choisis ta mise`
   } else {
-    $('statusText').textContent = 'choisis un camp'
+    $('statusText').textContent =
+      round?.phase === 'reveal' ? 'REVEAL — 5 s pour miser' : round?.phase === 'open' ? 'choisis un camp' : 'paris fermés'
   }
   for (const button of document.querySelectorAll<HTMLButtonElement>('.stakes button')) {
     const raw = button.dataset.stake
@@ -180,6 +181,33 @@ function leaveMagenta(): void {
   void wakeLock?.release().catch(() => undefined)
   wakeLock = null
   $('magentaHint').style.opacity = '1'
+}
+
+/**
+ * One screen per phase: bets before the clock, magenta while it runs, the betting screen again
+ * during each 5 s reveal window, then the result. Driven by the phase on every tick, so a phone
+ * that reconnects mid-round lands on the right screen.
+ */
+let shownPhase = ''
+function applyPhase(phase: string): void {
+  if ($('vJoin').classList.contains('on') || phase === shownPhase) return
+  const previous = shownPhase
+  shownPhase = phase
+  if (phase === 'live') {
+    void enterMagenta()
+  } else if (phase === 'reveal') {
+    leaveMagenta()
+    show('vGame')
+    if (navigator.vibrate) navigator.vibrate([20, 60, 20])
+  } else if (phase === 'open') {
+    show('vGame')
+  } else if (phase === 'frozen' || phase === 'settling') {
+    if (previous === 'live' || previous === 'reveal') {
+      leaveMagenta()
+      show('vGame')
+      $('statusText').textContent = 'fin du chrono — calcul du résultat…'
+    }
+  }
 }
 
 // --- socket ------------------------------------------------------------------------------
@@ -238,6 +266,7 @@ function handle(msg: Record<string, unknown>): void {
       break
     }
     case 'open': {
+      shownPhase = ''
       round = {
         id: Number(msg.roundId),
         kind: Number(msg.kind) as 0 | 1,
@@ -257,35 +286,36 @@ function handle(msg: Record<string, unknown>): void {
       setHidden(true)
       setTick('idle')
       // a phone still on the join screen stays there: the round must not skip onboarding
-      if (!$('vJoin').classList.contains('on')) show('vGame')
+      applyPhase('open')
       updateStatus()
       break
     }
     case 'tick': {
       if (round) round.phase = String(msg.phase ?? round.phase)
       const remaining = Number(msg.remainingMs ?? 0)
-      $('clock').textContent = `${(remaining / 1000).toFixed(1)}s`
-      $('clock').classList.toggle('paused', msg.phase === 'reveal')
+      const betting = msg.phase === 'open'
+      $('clock').textContent = betting ? 'PARIS OUVERTS' : `${(remaining / 1000).toFixed(1)}s`
+      $('clock').classList.toggle('paused', betting || msg.phase === 'reveal')
+      $('magentaClock').textContent = `${Math.ceil(remaining / 1000)}s`
       if (msg.hidden === false) showMults(msg)
+      else setHidden(true)
       if (msg.count !== undefined) $('magentaCount').textContent = String(msg.count)
+      if (msg.threshold !== undefined) $('magentaLine').textContent = `seuil ${String(msg.threshold)}`
+      applyPhase(String(msg.phase ?? ''))
       updateStatus()
       break
     }
     case 'reveal': {
       setHidden(false)
       showMults(msg)
-      if (navigator.vibrate) navigator.vibrate([20, 60, 20])
+      applyPhase('reveal')
       break
     }
-    case 'resume':
-      setHidden(true)
-      break
     case 'freeze': {
       setHidden(false)
       showMults(msg)
       setTick('final')
-      // round 2: the bet is locked, now the room becomes the oracle
-      void enterMagenta()
+      applyPhase('frozen')
       break
     }
     case 'bet_ok': {
@@ -312,6 +342,7 @@ function handle(msg: Record<string, unknown>): void {
     }
     case 'resolved': {
       leaveMagenta()
+      shownPhase = 'resolved'
       const winner = Number(msg.winner) as 0 | 1
       const won = mySide === winner && myStake > 0
       const you = msg.you as Record<string, unknown> | undefined

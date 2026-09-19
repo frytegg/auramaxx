@@ -18,7 +18,7 @@ import {
   onBroadcast,
   openRound,
   payout,
-  resume,
+  start,
   setCount,
   settle,
   snapshot,
@@ -182,9 +182,9 @@ app.post('/op/open', async (request, reply) => {
   return { ok: true }
 })
 
-app.post('/op/resume', async (request, reply) => {
+app.post('/op/start', async (request, reply) => {
   if (!guard(request)) return reply.code(403).send({ error: 'nope' })
-  resume()
+  start()
   return { ok: true }
 })
 

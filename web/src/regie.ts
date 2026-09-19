@@ -9,7 +9,8 @@ const AVATARS = ['🦊', '🐸', '👽', '🤖', '🐙', '🦈', '🔥', '💎',
 const PHASES: Record<string, string> = {
   idle: 'EN ATTENTE',
   open: 'PARIS OUVERTS',
-  reveal: 'REVEAL — EN PAUSE',
+  live: 'CHRONO EN COURS',
+  reveal: 'REVEAL — 5 S DE PARIS',
   frozen: 'GELÉ',
   settling: 'RÉSOLUTION…',
   resolved: 'RÉSOLU',
@@ -59,14 +60,14 @@ $('setCount').addEventListener('click', () => {
 function refreshButtons(): void {
   const enabled: Record<string, boolean> = {
     open: (phase === 'idle' || phase === 'resolved') && manche < MANCHES,
-    resume: phase === 'reveal',
-    freeze: phase === 'open' || phase === 'reveal',
+    start: phase === 'open',
+    freeze: phase === 'live' || phase === 'reveal',
     settle: phase === 'frozen',
     payout: phase === 'resolved',
   }
   // after manche 1 the next step is manche 2; the MON payout only comes once both are played
   const next =
-    phase === 'reveal' ? 'resume' : phase === 'frozen' ? 'settle' : phase === 'idle' ? 'open' : phase === 'resolved' ? (manche < MANCHES ? 'open' : 'payout') : ''
+    phase === 'open' ? 'start' : phase === 'frozen' ? 'settle' : phase === 'idle' ? 'open' : phase === 'resolved' ? (manche < MANCHES ? 'open' : 'payout') : ''
   for (const button of document.querySelectorAll<HTMLButtonElement>('[data-op]')) {
     const name = button.dataset.op!
     button.disabled = !enabled[name]
@@ -74,7 +75,7 @@ function refreshButtons(): void {
   }
   $('phase').textContent = PHASES[phase] ?? phase.toUpperCase()
   $('mancheLabel').textContent = manche > 0 ? `Manche ${manche}/${MANCHES}` : `Manche —/${MANCHES}`
-  $('openBtn').textContent = manche < MANCHES ? `1 · Lancer la manche ${manche + 1} (45s)` : 'Les 2 manches sont jouées'
+  $('openBtn').textContent = manche < MANCHES ? `1 · Ouvrir les paris — manche ${manche + 1}` : 'Les 2 manches sont jouées'
 }
 
 function showPools(up: unknown, down: unknown): void {
@@ -116,7 +117,7 @@ function handle(msg: Record<string, unknown>): void {
       phase = 'open'
       $('poolUp').textContent = 'caché'
       $('poolDown').textContent = 'caché'
-      log(`manche ${manche}/${MANCHES} lancée`)
+      log(`manche ${manche}/${MANCHES} : paris ouverts`)
       break
     case 'tick': {
       phase = String(msg.phase ?? phase)
@@ -125,8 +126,12 @@ function handle(msg: Record<string, unknown>): void {
       if (msg.hidden === false) showPools(msg.poolUp, msg.poolDown)
       break
     }
+    case 'start':
+      phase = 'live'
+      log(`chrono lancé · seuil projeté ${String(msg.threshold ?? '?')}`)
+      break
     case 'reveal':
-      log(`reveal #${String(msg.n)} — le round est en pause, clique « Reprendre »`)
+      log(`reveal #${String(msg.n)} — 5 s de paris, compte ${String(msg.count ?? 0)}`)
       showPools(msg.poolUp, msg.poolDown)
       break
     case 'threshold':

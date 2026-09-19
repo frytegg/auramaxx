@@ -10,9 +10,19 @@ export const Q1_MS = 30_000
 export const Q2_MS = 45_000
 /** Two magenta rounds make a game. */
 export const MANCHES = 2
+/** How long each reveal keeps betting open. The clock does not stop: the room keeps counting. */
+export const REVEAL_WINDOW_MS = 5_000
+/** Mirrors Auramaxx.sol, only to show a projected line before the contract computes the real one. */
+const TICKS = 11
+const THRESHOLD_PCT = 45
 
 export type Side = 0 | 1
-export type Phase = 'idle' | 'open' | 'reveal' | 'frozen' | 'settling' | 'resolved'
+/**
+ * A manche: 'open' = bets before the clock (no time limit), 'live' = the 45 s clock runs, bets are
+ * locked and the room shows magenta, 'reveal' = a short betting window at 1/3 and 2/3 while the
+ * clock and the camera keep running, then 'frozen' → 'settling' → 'resolved' on their own.
+ */
+export type Phase = 'idle' | 'open' | 'live' | 'reveal' | 'frozen' | 'settling' | 'resolved'
 
 export type Entry = {
   player: Address
@@ -39,6 +49,7 @@ type RoundState = {
   lastTick: number
   running: boolean
   revealsDone: number
+  revealUntil: number
   hidden: boolean
   entries: Entry[]
   stake: Map<Address, { side: Side; total: number }>
@@ -157,7 +168,10 @@ export async function bet(
 
 export async function openRound(kind: 0 | 1): Promise<void> {
   const id = Number(await publicClient().readContract({ address: contract, abi: AURAMAXX_ABI, functionName: 'roundCount' }))
-  const freezeAtBlock = (await blockNumber()) + 900n // generous on-chain bound; the operator drives the real timing
+  // the on-chain deadline for committing bets. Betting now opens BEFORE the clock with no time
+  // limit, and 900 blocks (~5 min at ~0.3 s) could expire while the room is still betting, which
+  // would make every commitBatch revert. 20,000 blocks is roughly an hour and a half.
+  const freezeAtBlock = (await blockNumber()) + 20_000n
   await send('openRound', [kind, freezeAtBlock], await gasFor('openRound', [kind, freezeAtBlock], GAS.open))
 
   round = {
@@ -167,8 +181,9 @@ export async function openRound(kind: 0 | 1): Promise<void> {
     durationMs: kind === 0 ? Q1_MS : Q2_MS,
     elapsedMs: 0,
     lastTick: Date.now(),
-    running: true,
+    running: false, // the clock starts on /op/start, once the room has placed its bets
     revealsDone: 0,
+    revealUntil: 0,
     hidden: true,
     entries: [],
     stake: new Map(),
@@ -189,18 +204,27 @@ export async function openRound(kind: 0 | 1): Promise<void> {
   log.info({ id, kind, openPrice: round.openPrice }, 'round opened')
 }
 
-export function resume(): void {
-  if (!round || round.phase !== 'reveal') return
-  round.phase = 'open'
-  round.hidden = true
+/** Starts the 45 s clock: bets lock, phones go magenta, and the count starts from zero. */
+export function start(): void {
+  if (!round || round.phase !== 'open') return
+  round.phase = 'live'
   round.running = true
   round.lastTick = Date.now()
-  emit({ type: 'resume', roundId: round.id })
+  round.elapsedMs = 0
+  round.count = 0
+  round.visible = 0
+  emit({ type: 'start', roundId: round.id, durationMs: round.durationMs, threshold: projectedThreshold(round) })
+  log.info({ id: round.id, bettors: round.stake.size }, 'clock started')
+}
+
+function projectedThreshold(r: RoundState): number {
+  return Math.floor((r.stake.size * TICKS * THRESHOLD_PCT) / 100)
 }
 
 /** The camera page pushes this; it is also what settles a magenta round. */
 export function cameraUpdate(total: number, visible: number): void {
-  if (!round || round.kind !== 1) return
+  // only the 45 s window counts: lights before the start or after the end are ignored
+  if (!round || round.kind !== 1 || (round.phase !== 'live' && round.phase !== 'reveal')) return
   round.count = total
   round.visible = visible
 }
@@ -348,7 +372,11 @@ export function snapshot(address?: Address): Record<string, unknown> {
           phase: round.phase,
           hidden: round.hidden,
           remainingMs: Math.max(0, round.durationMs - round.elapsedMs),
-          threshold: round.threshold,
+          threshold: round.threshold ?? projectedThreshold(round),
+          // the count is the room's own action and bets are locked while it runs, so it is public;
+          // only the pools are withheld outside a reveal
+          count: round.count,
+          visible: round.visible,
           // counts are withheld entirely while hidden: sending them and hiding them client-side
           // puts them one DevTools tab away
           ...(round.hidden
@@ -356,8 +384,6 @@ export function snapshot(address?: Address): Record<string, unknown> {
             : {
                 poolUp: round.poolUp,
                 poolDown: round.poolDown,
-                count: round.count,
-                visible: round.visible,
               }),
         }
       : null,
@@ -425,9 +451,13 @@ export function startLoop(): void {
       const first = r.durationMs / 3
       const second = (r.durationMs * 2) / 3
 
+      if (r.phase === 'reveal' && r.elapsedMs >= r.revealUntil) closeReveal(r)
       if (r.revealsDone === 0 && r.elapsedMs >= first) doReveal(r, 1)
       else if (r.revealsDone === 1 && r.elapsedMs >= second) doReveal(r, 2)
-      else if (r.elapsedMs >= r.durationMs) void freezeNow()
+      else if (r.elapsedMs >= r.durationMs) {
+        r.running = false
+        void endRound()
+      }
     }
 
     emit({
@@ -436,15 +466,29 @@ export function startLoop(): void {
       remainingMs: Math.max(0, r.durationMs - r.elapsedMs),
       hidden: r.hidden,
       ...(r.hidden ? {} : { poolUp: r.poolUp, poolDown: r.poolDown, ...multipliers(r) }),
-      ...(r.kind === 1 && !r.hidden ? { count: r.count, visible: r.visible } : {}),
+      count: r.count,
+      visible: r.visible,
+      threshold: r.threshold ?? projectedThreshold(r),
     })
   }, 100)
+}
+
+/** 45 s are up: lock, commit, and settle without waiting for the régie. */
+async function endRound(): Promise<void> {
+  await freezeNow()
+  if (round?.phase === 'frozen') await settle() // settle() puts it back to 'frozen' on failure: the régie can retry
+}
+
+function closeReveal(r: RoundState): void {
+  r.phase = 'live'
+  r.hidden = true
+  emit({ type: 'reveal_end', roundId: r.id })
 }
 
 function doReveal(r: RoundState, n: number): void {
   r.revealsDone = n
   r.phase = 'reveal'
-  r.running = false
+  r.revealUntil = r.elapsedMs + REVEAL_WINDOW_MS
   r.hidden = false
   const m = multipliers(r)
   emit({
@@ -457,7 +501,9 @@ function doReveal(r: RoundState, n: number): void {
     poolDown: r.poolDown,
     mult_up_x100: m.up,
     mult_down_x100: m.down,
-    ...(r.kind === 1 ? { count: r.count, threshold: r.threshold } : {}),
+    windowMs: REVEAL_WINDOW_MS,
+    count: r.count,
+    threshold: projectedThreshold(r),
   })
   log.info({ n, poolUp: r.poolUp, poolDown: r.poolDown }, 'reveal')
 }

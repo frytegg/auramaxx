@@ -6,6 +6,7 @@
  * navigator.mediaDevices is simply undefined, with no error dialog — hence the banner below.
  */
 import { DEFAULTS, GRID_H, GRID_W, MagentaDetector, type Options } from './detect.js'
+import { linkCamera } from './camera-link.js'
 
 const video = document.getElementById('video') as HTMLVideoElement
 const overlay = document.getElementById('overlay') as HTMLCanvasElement
@@ -29,6 +30,8 @@ window.addEventListener('unhandledrejection', (e) => {
 })
 
 const detector = new MagentaDetector()
+let lastVisible = 0
+linkCamera(detector, () => lastVisible) // resets on the régie's start, streams the count to the game
 let devices: MediaDeviceInfo[] = []
 let deviceIndex = 0
 let stream: MediaStream | null = null
@@ -138,6 +141,7 @@ function draw(): void {
   }
 
   const result = detector.process(video, performance.now())
+  lastVisible = result.visible
 
   const w = overlay.clientWidth
   const h = overlay.clientHeight

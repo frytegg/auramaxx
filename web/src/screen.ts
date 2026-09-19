@@ -6,6 +6,14 @@ import { JOIN_URL, WS_URL, api } from './api.js'
 
 const $ = (id: string): HTMLElement => document.getElementById(id)!
 
+const PHASES: Record<string, string> = {
+  open: 'paris ouverts',
+  live: 'en direct',
+  reveal: 'reveal',
+  frozen: 'fin',
+  settling: 'résolution…',
+  resolved: 'résolu',
+}
 const QUESTION = 'COMBIEN VONT S’ALLUMER ?'
 
 function setManche(n: number): void {
@@ -54,19 +62,30 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       $('question').textContent = QUESTION
       $('liveCount').textContent = '—'
       $('liveThreshold').textContent = '?'
-      $('phase').textContent = 'open'
+      $('phase').textContent = 'paris ouverts'
+      $('clock').textContent = 'PARIEZ'
       setHidden(true)
-      setJoinVisible(false)
+      setJoinVisible(true) // betting before the clock: late arrivals can still scan and bet
       hideFlash()
+      break
+    }
+    case 'start': {
+      $('question').textContent = 'MONTREZ VOS ÉCRANS !'
+      $('liveCount').textContent = '0'
+      $('liveThreshold').textContent = String(msg.threshold ?? '?')
+      setJoinVisible(false)
       break
     }
     case 'tick': {
       const remaining = Number(msg.remainingMs ?? 0)
-      $('clock').textContent = (remaining / 1000).toFixed(1)
-      $('clock').classList.toggle('paused', msg.phase === 'reveal')
-      $('phase').textContent = String(msg.phase ?? '')
+      if (msg.phase !== 'open') $('clock').textContent = (remaining / 1000).toFixed(1)
+      $('clock').classList.toggle('paused', msg.phase === 'reveal' || msg.phase === 'open')
+      $('phase').textContent = PHASES[String(msg.phase)] ?? String(msg.phase ?? '')
       if (msg.hidden === false) showPools(msg)
+      else setHidden(true)
       if (msg.count !== undefined) $('liveCount').textContent = String(msg.count)
+      if (msg.threshold !== undefined && msg.threshold !== null) $('liveThreshold').textContent = String(msg.threshold)
+      if (msg.phase === 'live' || msg.phase === 'reveal') setJoinVisible(false)
       break
     }
     case 'threshold':
@@ -75,11 +94,12 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
     case 'reveal': {
       setHidden(false)
       showPools(msg)
-      $('phase').textContent = `reveal ${String(msg.n ?? '')}`
+      $('phase').textContent = `reveal ${String(msg.n ?? '')} — 5 s pour miser`
+      $('question').textContent = `REVEAL ${String(msg.n ?? '')} — DERNIÈRE CHANCE DE MISER`
       break
     }
-    case 'resume':
-      setHidden(true)
+    case 'reveal_end':
+      $('question').textContent = 'MONTREZ VOS ÉCRANS !'
       break
     case 'freeze': {
       setHidden(false)
