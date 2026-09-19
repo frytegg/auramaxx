@@ -8,7 +8,52 @@
 
 export type Mode = 'A' | 'B'
 
-export type TrackedBlob = { x: number; y: number }
+export type TrackedBlob = { x: number; y: number; minX?: number; minY?: number; maxX?: number; maxY?: number }
+
+/**
+ * A phone screen rarely arrives as one clean blob: a finger across it, a reflection or a viewing
+ * angle splits it into fragments. Merge fragments that are close together into one screen before
+ * tracking, otherwise each fragment becomes its own source and scores its own point.
+ */
+export function mergeBlobs(blobs: readonly TrackedBlob[], gap: number): TrackedBlob[] {
+  const boxes = blobs.map((b) => ({
+    minX: b.minX ?? b.x,
+    minY: b.minY ?? b.y,
+    maxX: b.maxX ?? b.x,
+    maxY: b.maxY ?? b.y,
+    x: b.x,
+    y: b.y,
+    n: 1,
+  }))
+
+  let merged = true
+  while (merged) {
+    merged = false
+    outer: for (let i = 0; i < boxes.length; i++) {
+      for (let j = i + 1; j < boxes.length; j++) {
+        const a = boxes[i]!
+        const b = boxes[j]!
+        const apart =
+          a.minX - b.maxX > gap || b.minX - a.maxX > gap || a.minY - b.maxY > gap || b.minY - a.maxY > gap
+        if (apart) continue
+        const n = a.n + b.n
+        boxes[i] = {
+          minX: Math.min(a.minX, b.minX),
+          minY: Math.min(a.minY, b.minY),
+          maxX: Math.max(a.maxX, b.maxX),
+          maxY: Math.max(a.maxY, b.maxY),
+          x: (a.x * a.n + b.x * b.n) / n,
+          y: (a.y * a.n + b.y * b.n) / n,
+          n,
+        }
+        boxes.splice(j, 1)
+        merged = true
+        break outer
+      }
+    }
+  }
+  return boxes.map((b) => ({ x: b.x, y: b.y, minX: b.minX, minY: b.minY, maxX: b.maxX, maxY: b.maxY }))
+}
 
 export type TrackerOptions = {
   radius: number
@@ -35,6 +80,12 @@ const SOURCE_TTL_MS = 10_000
 const MAX_PREDICTED_DRIFT = 45
 /** Velocity is only trustworthy across a few frames; beyond this we assume it stayed put. */
 const MAX_PREDICTION_MS = 250
+/**
+ * Temporal hysteresis: a screen stays "visible" for this long after its blob vanishes. Real masks
+ * flicker — a hand shifts, the angle changes, compression eats a frame — and without a grace
+ * period every flicker looks like the screen was lowered and raised again.
+ */
+const VISIBLE_GRACE_MS = 300
 /** A spot that counted recently keeps a wider claim, so the same screen cannot score twice
  *  just because the tracker lost it for a moment. */
 const COOLDOWN_CLAIM = 2.5
@@ -126,6 +177,30 @@ export class SourceTracker {
       }
 
       if (!best) {
+        // Before inventing a screen, check EVERY source including those already matched this
+        // frame: a split screen would otherwise have its second fragment score a second point.
+        // Tight on purpose: two people sitting side by side are only ~15 grid pixels apart in a
+        // wide shot, so a generous guard would silently merge neighbours. Fragments of one screen
+        // are handled by mergeBlobs, not here; this only stops a piece of a just-counted screen
+        // from scoring twice.
+        let near: Source | null = null
+        let nearD2 = radius * radius
+        for (const source of this.sources) {
+          if (now >= source.cooldownUntil) continue // only a spot that just counted holds ground
+          const dx = source.x - blob.x
+          const dy = source.y - blob.y
+          const d2 = dx * dx + dy * dy
+          if (d2 <= nearD2) {
+            nearD2 = d2
+            near = source
+          }
+        }
+        if (near) {
+          near.visible = true
+          near.lastSeenAt = now
+          continue // same screen, already counted
+        }
+
         const created: Source = {
           x: blob.x,
           y: blob.y,
@@ -163,7 +238,10 @@ export class SourceTracker {
       matched.add(best)
     }
 
-    for (const source of this.sources) if (!matched.has(source)) source.visible = false
+    // a source only stops being visible once it has been gone for longer than the grace period
+    for (const source of this.sources) {
+      if (!matched.has(source)) source.visible = now - source.lastSeenAt <= VISIBLE_GRACE_MS
+    }
     this.sources = this.sources.filter((s) => now - s.lastSeenAt < SOURCE_TTL_MS)
   }
 

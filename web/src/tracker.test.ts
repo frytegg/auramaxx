@@ -3,10 +3,19 @@
  * No camera, no DOM — these are the rules the room will try to break.
  */
 import assert from 'node:assert/strict'
-import { SourceTracker, type TrackedBlob } from './tracker.js'
+import { SourceTracker, mergeBlobs, type TrackedBlob } from './tracker.js'
 
 const options = { radius: 10, cooldownMs: 4000, tickMs: 4000, mode: 'A' as const }
 const at = (x: number, y: number): TrackedBlob => ({ x, y })
+/** a blob with a real bounding box, the way the detector actually emits them */
+const box = (minX: number, minY: number, maxX: number, maxY: number): TrackedBlob => ({
+  x: (minX + maxX) / 2,
+  y: (minY + maxY) / 2,
+  minX,
+  minY,
+  maxX,
+  maxY,
+})
 let passed = 0
 
 function check(name: string, fn: () => void): void {
@@ -78,8 +87,10 @@ check('the cap scales with the number of screens actually in the room', () => {
   assert.equal(t.total, 40, '40 phones all count on the first window')
   for (let ms = 100; ms < 3900; ms += 100) t.ingest(forty, ms)
   assert.equal(t.total, 40, 'holding them up does not add more inside the window')
+  // lower them properly: a flicker shorter than the 300 ms grace is not "lowered and raised"
   t.ingest([], 4100)
-  t.ingest(forty, 4200)
+  t.ingest([], 4600)
+  t.ingest(forty, 5000)
   assert.equal(t.total, 80, 'the next window allows another 40')
 })
 
@@ -148,6 +159,62 @@ check('the operator can override the count', () => {
   t.ingest([at(100, 50)], 0)
   t.setTotal(42)
   assert.equal(t.total, 42, 'COUNTED BY: HUMAN')
+})
+
+// --- what the bench actually produces: one screen arriving as several fragments -------------
+
+check('BUG 1: a screen split by a finger counts once, not twice', () => {
+  const t = new SourceTracker({ ...options })
+  const fragments = [box(100, 40, 112, 70), box(116, 40, 124, 70)] // one phone, mask in two pieces
+  const screens = mergeBlobs(fragments, 12)
+  assert.equal(screens.length, 1, 'the two fragments are one screen')
+  t.ingest(screens, 0)
+  assert.equal(t.total, 1)
+})
+
+check('BUG 1: fragments that come and go while moving still count once', () => {
+  const t = new SourceTracker({ ...options })
+  let ms = 0
+  for (let step = 0; step < 20; step++) {
+    const x = 100 + step * 3
+    // the split pattern changes every frame, as it does in the real mask
+    const raw = step % 2 === 0 ? [box(x, 40, x + 12, 70), box(x + 16, 40, x + 24, 70)] : [box(x, 40, x + 24, 70)]
+    t.ingest(mergeBlobs(raw, 12), ms)
+    ms += 60
+  }
+  assert.equal(t.total, 1, `a single moving screen: got ${t.total}`)
+})
+
+check('BUG 2: a fragment beside a just-counted screen cannot score', () => {
+  const t = new SourceTracker({ ...options })
+  t.ingest([at(100, 50)], 0)
+  t.ingest([at(100, 50), at(108, 50)], 60) // a second piece appears beside it, unmerged
+  assert.equal(t.total, 1, 'the proximity guard holds even when merging misses')
+})
+
+check('BUG 2: hide and re-show within the cooldown, fragmented, does not count', () => {
+  const t = new SourceTracker({ ...options })
+  t.ingest(mergeBlobs([box(100, 40, 124, 70)], 12), 0)
+  assert.equal(t.total, 1)
+  t.ingest([], 500)
+  t.ingest([], 1500)
+  t.ingest(mergeBlobs([box(104, 42, 116, 72), box(120, 42, 128, 72)], 12), 2500)
+  assert.equal(t.total, 1, `still one point: got ${t.total}`)
+})
+
+check('a one-frame flicker is not a new show', () => {
+  const t = new SourceTracker({ ...options })
+  t.ingest([at(100, 50)], 0)
+  for (let ms = 100; ms < 9000; ms += 100) {
+    // the mask drops the screen for a single frame every second, as real masks do
+    t.ingest(ms % 1000 === 0 ? [] : [at(100, 50)], ms)
+  }
+  assert.equal(t.total, 1, `a phone held up through flicker scores once: got ${t.total}`)
+})
+
+check('two genuinely distinct screens are never merged', () => {
+  const far = mergeBlobs([box(40, 40, 60, 70), box(200, 40, 220, 70)], 12)
+  assert.equal(far.length, 2, 'two people apart in the room must stay two screens')
 })
 
 console.log(`\n${passed} tests passed`)

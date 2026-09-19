@@ -10,7 +10,7 @@
  * Magenta because nothing in a room is magenta. Never green — French exit signs are green.
  */
 
-import { SourceTracker, type Mode } from './tracker.js'
+import { SourceTracker, mergeBlobs, type Mode } from './tracker.js'
 
 export type { Mode }
 
@@ -18,8 +18,17 @@ export const GRID_W = 320
 export const GRID_H = 180
 
 export type Options = {
-  /** min(R,B) - G above this counts as magenta. Magenta ~229, white 0, skin ~-67, exit sign ~-200 */
+  /** max gap, in grid pixels, between two fragments of the same screen */
+  mergeGap: number
+  /** min(R,B) - G above this SEEDS a screen. Magenta ~229, white 0, skin ~-67, exit sign ~-200 */
   threshold: number
+  /**
+   * Hysteresis, the standard trick from edge detection: a pixel only needs `threshold * weakRatio`
+   * to JOIN a screen that already has a strong pixel. The dim edges of a phone six metres away,
+   * or a screen seen at an angle, stop being eaten by the threshold — without letting warm
+   * background pixels start a screen of their own.
+   */
+  weakRatio: number
   /** ignore specks: minimum blob area in grid pixels */
   minArea: number
   /** how far a screen may move and still be the same source, in grid pixels */
@@ -32,9 +41,13 @@ export type Options = {
 }
 
 export const DEFAULTS: Options = {
+  /** fragments of one screen closer than this are merged before tracking */
+  mergeGap: 12,
   threshold: 60,
+  weakRatio: 0.55,
   minArea: 6,
-  radius: 18, // bench 19 Sept: 10 was too tight, a moving screen spawned a trail of sources
+  radius: 12, // wide shot: ~25 grid px per metre, so 12 is about half a metre. Bigger than
+  // that and two neighbours merge into one screen.
   cooldownMs: 4000,
   tickMs: 4000,
   mode: 'A',
@@ -44,6 +57,8 @@ export type Blob = { x: number; y: number; area: number; minX: number; minY: num
 
 export type FrameResult = {
   blobs: Blob[]
+  /** blobs after merging fragments: this is the number of actual screens */
+  screens: number
   visible: number
   total: number
   sources: ReadonlyArray<{ x: number; y: number; cooling: boolean }>
@@ -82,7 +97,8 @@ export class MagentaDetector {
 
   /** Called at bet-lock: everything already lit is ignored from here on. */
   captureReference(): void {
-    this.reference = new Uint8Array(this.mask)
+    // keep weak pixels in the reference too, so a static magenta object cannot creep back in
+    this.reference = Uint8Array.from(this.mask, (v) => (v > 0 ? 1 : 0))
   }
 
   clearReference(): void {
@@ -109,6 +125,7 @@ export class MagentaDetector {
     const { data } = this.ctx.getImageData(0, 0, GRID_W, GRID_H)
 
     const { threshold } = this.options
+    const weak = threshold * this.options.weakRatio
     const mask = this.mask
     const reference = this.reference
     for (let i = 0, p = 0; i < mask.length; i++, p += 4) {
@@ -117,12 +134,18 @@ export class MagentaDetector {
       const b = data[p + 2]!
       const score = (r < b ? r : b) - g
       // a pixel already lit at lock time never counts again
-      mask[i] = score > threshold && !(reference && reference[i]) ? 1 : 0
+      if (reference && reference[i]) {
+        mask[i] = 0
+        continue
+      }
+      // 2 = strong (can start a screen), 1 = weak (can only extend one)
+      mask[i] = score > threshold ? 2 : score > weak ? 1 : 0
     }
 
     const blobs = this.connectedComponents()
     const result: FrameResult = {
       blobs,
+      screens: blobs.length,
       visible: blobs.length,
       total: this.tracker.total,
       sources: [],
@@ -136,7 +159,11 @@ export class MagentaDetector {
     this.tracker.options.tickMs = this.options.tickMs
     this.tracker.options.mode = this.options.mode
 
-    result.tickJustFired = this.tracker.ingest(blobs, now)
+    // one screen often arrives as several fragments: merge before tracking
+    const screens = mergeBlobs(blobs, this.options.mergeGap)
+    result.screens = screens.length
+    result.tickJustFired = this.tracker.ingest(screens, now)
+    result.visible = screens.length
     result.total = this.tracker.total
     result.sources = this.tracker.sourceViews
     result.ms = performance.now() - started
@@ -154,7 +181,7 @@ export class MagentaDetector {
     let label = 0
 
     for (let start = 0; start < mask.length; start++) {
-      if (mask[start] !== 1 || labels[start] !== 0) continue
+      if (mask[start] !== 2 || labels[start] !== 0) continue // only a strong pixel seeds
       label += 1
       let top = 0
       stack[top++] = start
@@ -169,7 +196,7 @@ export class MagentaDetector {
       let maxY = 0
 
       const visit = (index: number): void => {
-        if (mask[index] !== 1 || labels[index] !== 0) return
+        if (mask[index] === 0 || labels[index] !== 0) return // weak pixels may join, empties may not
         labels[index] = label
         stack[top++] = index
       }
