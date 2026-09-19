@@ -62,19 +62,18 @@
 
       <div class="grid">
         <section class="card">
-          <span class="label">Round en cours</span>
+          <span class="label" id="mancheLabel">Manche —/2</span>
           <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px">
             <span class="time" id="time">—:—</span>
             <span class="phase" id="phase">EN ATTENTE</span>
           </div>
           <div class="pools">
-            <div class="pool up"><div class="s" id="upLabel">UP</div><div class="n" id="poolUp">caché</div></div>
-            <div class="pool down"><div class="s" id="downLabel">DOWN</div><div class="n" id="poolDown">caché</div></div>
+            <div class="pool up"><div class="s">OVER</div><div class="n" id="poolUp">caché</div></div>
+            <div class="pool down"><div class="s">UNDER</div><div class="n" id="poolDown">caché</div></div>
           </div>
           <span class="label">Lancer</span>
           <div class="row">
-            <button class="btn" data-op="open" data-kind="0">1 · Question BTC (30s)</button>
-            <button class="btn" data-op="open" data-kind="1">1 · Round caméra magenta (45s)</button>
+            <button class="btn" data-op="open" id="openBtn">1 · Lancer la manche 1 (45s)</button>
           </div>
           <span class="label">Pendant le round</span>
           <div class="row">

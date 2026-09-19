@@ -55,8 +55,6 @@
       .question { font-family: 'Anton', sans-serif; font-size: 30px; letter-spacing: .02em; line-height: 1.15; text-align: center; }
       .clock { font-family: 'Anton', sans-serif; font-size: 64px; text-align: center; font-variant-numeric: tabular-nums; }
       .clock.paused { color: var(--magenta); font-size: 34px; }
-      .chartbox { height: 120px; border-radius: 16px; background: var(--surface); border: 1px solid var(--border); }
-      canvas { width: 100%; height: 100%; display: block; }
 
       .sides { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
       .side {
@@ -124,10 +122,9 @@
       </div>
       <div class="question" id="q">en attente de la manche…</div>
       <div class="clock" id="clock">—</div>
-      <div class="chartbox" id="chartbox"><canvas id="chart"></canvas></div>
       <div class="sides">
-        <div class="side up" id="sideUp"><div class="name" id="upName">UP</div><div class="mult" id="upMult">caché</div></div>
-        <div class="side down" id="sideDown"><div class="name" id="downName">DOWN</div><div class="mult" id="downMult">caché</div></div>
+        <div class="side up" id="sideUp"><div class="name" id="upName">OVER</div><div class="mult" id="upMult">caché</div></div>
+        <div class="side down" id="sideDown"><div class="name" id="downName">UNDER</div><div class="mult" id="downMult">caché</div></div>
       </div>
       <div class="stakes">
         <button data-stake="100">100</button>

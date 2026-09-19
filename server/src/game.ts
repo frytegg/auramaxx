@@ -8,6 +8,8 @@ import { currentPrice, onPrice, priceHistory, priceScaled } from './price.js'
 export const BUDGET = 1000
 export const Q1_MS = 30_000
 export const Q2_MS = 45_000
+/** Two magenta rounds make a game. */
+export const MANCHES = 2
 
 export type Side = 0 | 1
 export type Phase = 'idle' | 'open' | 'reveal' | 'frozen' | 'settling' | 'resolved'
@@ -55,6 +57,7 @@ type RoundState = {
 
 export const players = new Map<Address, Player>()
 let round: RoundState | null = null
+let manche = 0
 let joinQueue: Player[] = []
 const listeners = new Set<(event: unknown) => void>()
 
@@ -181,7 +184,8 @@ export async function openRound(kind: 0 | 1): Promise<void> {
     settleMs: null,
     paid: 0,
   }
-  emit({ type: 'open', roundId: id, kind, durationMs: round.durationMs, openPrice: round.openPrice })
+  manche += 1
+  emit({ type: 'open', roundId: id, kind, manche, manches: MANCHES, durationMs: round.durationMs, openPrice: round.openPrice })
   log.info({ id, kind, openPrice: round.openPrice }, 'round opened')
 }
 
@@ -335,6 +339,8 @@ export function snapshot(address?: Address): Record<string, unknown> {
   return {
     type: 'snapshot',
     players: players.size,
+    manche,
+    manches: MANCHES,
     round: round
       ? {
           id: round.id,

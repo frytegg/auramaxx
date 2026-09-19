@@ -20,7 +20,8 @@ keyInput.value = fromUrl ?? localStorage.getItem('auramaxx.opkey') ?? ''
 keyInput.addEventListener('change', () => localStorage.setItem('auramaxx.opkey', keyInput.value))
 
 let phase = 'idle'
-let kind: 0 | 1 = 0
+let manche = 0
+const MANCHES = 2
 
 function log(text: string, error = false): void {
   const line = document.createElement('div')
@@ -45,7 +46,7 @@ async function op(path: string, query: Record<string, string> = {}): Promise<voi
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-op]')) {
   button.addEventListener('click', () => {
     const name = button.dataset.op!
-    void op(name, button.dataset.kind ? { kind: button.dataset.kind } : {})
+    void op(name)
   })
 }
 
@@ -56,21 +57,23 @@ $('setCount').addEventListener('click', () => {
 /** Highlights the one button that makes sense next, and disables the ones that cannot work. */
 function refreshButtons(): void {
   const enabled: Record<string, boolean> = {
-    open: phase === 'idle' || phase === 'resolved',
+    open: (phase === 'idle' || phase === 'resolved') && manche < MANCHES,
     resume: phase === 'reveal',
     freeze: phase === 'open' || phase === 'reveal',
     settle: phase === 'frozen',
     payout: phase === 'resolved',
   }
-  const next = phase === 'reveal' ? 'resume' : phase === 'frozen' ? 'settle' : phase === 'resolved' ? 'payout' : phase === 'idle' ? 'open' : ''
+  // after manche 1 the next step is manche 2; the MON payout only comes once both are played
+  const next =
+    phase === 'reveal' ? 'resume' : phase === 'frozen' ? 'settle' : phase === 'idle' ? 'open' : phase === 'resolved' ? (manche < MANCHES ? 'open' : 'payout') : ''
   for (const button of document.querySelectorAll<HTMLButtonElement>('[data-op]')) {
     const name = button.dataset.op!
     button.disabled = !enabled[name]
     button.classList.toggle('next', name === next)
   }
   $('phase').textContent = PHASES[phase] ?? phase.toUpperCase()
-  $('upLabel').textContent = kind === 1 ? 'OVER' : 'UP'
-  $('downLabel').textContent = kind === 1 ? 'UNDER' : 'DOWN'
+  $('mancheLabel').textContent = manche > 0 ? `Manche ${manche}/${MANCHES}` : `Manche —/${MANCHES}`
+  $('openBtn').textContent = manche < MANCHES ? `1 · Lancer la manche ${manche + 1} (45s)` : 'Les 2 manches sont jouées'
 }
 
 function showPools(up: unknown, down: unknown): void {
@@ -94,10 +97,10 @@ function handle(msg: Record<string, unknown>): void {
   switch (msg.type) {
     case 'snapshot': {
       $('players').textContent = `${String(msg.players ?? 0)} joueur(s) inscrit(s)`
+      manche = Number(msg.manche ?? manche)
       const round = msg.round as Record<string, unknown> | null
       if (round) {
         phase = String(round.phase)
-        kind = Number(round.kind) as 0 | 1
         showPools(round.poolUp, round.poolDown)
       }
       renderBoard(msg.leaderboard as Array<Record<string, unknown>>)
@@ -108,11 +111,11 @@ function handle(msg: Record<string, unknown>): void {
       log(`${String(msg.name)} a rejoint`)
       break
     case 'open':
-      kind = Number(msg.kind) as 0 | 1
+      manche = Number(msg.manche ?? manche + 1)
       phase = 'open'
       $('poolUp').textContent = 'caché'
       $('poolDown').textContent = 'caché'
-      log(`round ${String(msg.roundId)} ouvert (${kind === 0 ? 'BTC' : 'magenta'})`)
+      log(`manche ${manche}/${MANCHES} lancée`)
       break
     case 'tick': {
       phase = String(msg.phase ?? phase)
@@ -130,7 +133,7 @@ function handle(msg: Record<string, unknown>): void {
       break
     case 'resolved':
       phase = 'resolved'
-      log(`résolu : ${Number(msg.winner) === 0 ? (kind === 1 ? 'OVER' : 'UP') : kind === 1 ? 'UNDER' : 'DOWN'} · ${String(msg.paid ?? 0)} payés`)
+      log(`manche ${manche} résolue : ${Number(msg.winner) === 0 ? 'OVER' : 'UNDER'} (${String(msg.count ?? 0)} vs seuil ${String(msg.threshold ?? 0)}) · ${String(msg.paid ?? 0)} payés`)
       renderBoard(msg.leaderboard as Array<Record<string, unknown>>)
       break
     case 'payout':
@@ -154,3 +157,5 @@ function connect(): void {
 
 refreshButtons()
 connect()
+
+export {}

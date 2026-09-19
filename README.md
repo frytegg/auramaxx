@@ -95,6 +95,9 @@ cd web && pnpm install && pnpm dev          # :5173
 
 Reveals pause the round: press « Reprendre » in the régie to continue.
 
+On this branch the BTC question is gone: a game is **two magenta rounds** (manche 1/2 and 2/2),
+opened from the régie. The projector shows the live camera count against the contract's threshold.
+
 ## Licence
 
 MIT
