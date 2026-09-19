@@ -48,10 +48,12 @@
         background: radial-gradient(90% 70% at 50% -10%, #2B0F52 0%, #0B0710 65%) fixed, #0B0710;
       }
       .lobby.off { display: none; }
-      .lobbyBrand { font-family: 'Anton', sans-serif; font-size: 132px; letter-spacing: 8px; color: var(--magenta); line-height: 1; }
-      .lobbyTag { font-size: 30px; opacity: .75; margin-top: 18px; }
+      .lobbyBrand { font-family: 'Anton', sans-serif; font-size: 112px; letter-spacing: 8px; color: var(--magenta); line-height: 1; }
+      .lobbyTag { font-size: 28px; opacity: .75; margin-top: 14px; }
+      .mascot { width: min(860px, 74vw); margin: 2px auto -6px; }
+      .mascot svg { width: 100%; height: auto; display: block; overflow: visible; }
       .start {
-        margin-top: 52px; padding: 22px 64px; border: 0; border-radius: 999px; cursor: pointer;
+        margin-top: 8px; padding: 22px 64px; border: 0; border-radius: 999px; cursor: pointer;
         font-family: 'Anton', sans-serif; font-size: 40px; letter-spacing: 2px; color: #0B0710;
         background: var(--magenta); box-shadow: 0 0 60px rgba(255,46,158,.45);
         transition: transform .12s ease, box-shadow .12s ease;
@@ -142,6 +144,7 @@
       <div>
         <div class="lobbyBrand">AURAMAXX</div>
         <div class="lobbyTag">Bet on the room. The camera settles it.</div>
+        <div class="mascot" id="mascot"></div>
         <button class="start" id="startBtn">Start a game</button>
         <div class="lobbyNote" id="startNote">Two rounds · 1000 AURA each · Winners are paid in MON</div>
       </div>

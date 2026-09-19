@@ -3,6 +3,7 @@
  * number of players does not change how much traffic this page makes.
  */
 import { JOIN_URL, WS_URL, api } from './api.js'
+import { mountMascot } from './avatar.js'
 
 const $ = (id: string): HTMLElement => document.getElementById(id)!
 
@@ -29,10 +30,18 @@ type Stage = 'lobby' | 'join' | 'game'
 const opKey = new URLSearchParams(location.search).get('k') ?? localStorage.getItem('auramaxx.opkey') ?? ''
 if (opKey) localStorage.setItem('auramaxx.opkey', opKey)
 
+// the projector laptop also runs the camera detector, so the mascot only animates on the
+// landing page and gives the CPU back the moment a game starts
+const mascot = mountMascot($('mascot'))
+
 function setStage(stage: Stage): void {
   $('lobby').classList.toggle('off', stage !== 'lobby')
   $('join').classList.toggle('off', stage !== 'join')
+  if (stage === 'lobby') mascot.start()
+  else mascot.stop()
 }
+
+mascot.start()
 
 function note(text: string, error = false): void {
   $('startNote').textContent = text
