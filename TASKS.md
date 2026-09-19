@@ -35,7 +35,7 @@ order) · demos ~18:30 · **3 minutes on stage**.
 - [ ] Rounds (kind: price / magenta), `commitBatch` with per-player stake cap
       `1000 − alreadyStaked`, `resolveByPrice`, `resolveByCount` with the 45% threshold,
       `resolveChunk`, `payoutMon`, view functions for rehydration
-- [ ] Payout maths exactly as `pari_formules.pdf` — multiply before divide, empty winning pool
+- [ ] Payout maths exactly as `auramaxx_paper.pdf` — multiply before divide, empty winning pool
       refunds, dust to `faucetReserve`
 - [ ] Five forge tests only: multipliers sum correctly · pro-rata payout with no dust left ·
       one-sided pool refunds · replayed nonce rejected · stake above the remaining balance

@@ -32,7 +32,7 @@ jury gets it in one sentence.
 
 - **1,000 AURA credited fresh at each question.** Balance does not carry over, so nobody can be
   eliminated and no recharge system is needed.
-- **Free stake**, `s_i >= 1`, chosen by the player (per `pari_formules.pdf §1`). Not a fixed
+- **Free stake**, `s_i >= 1`, chosen by the player (per `auramaxx_paper.pdf §1`). Not a fixed
   amount.
 - **UI: four buttons — `100` · `250` · `500` · `ALL IN`.** No keyboard, no slider: a beginner has
   10 seconds and taps a button without thinking.
@@ -65,7 +65,7 @@ Same skeleton for both questions.
   ~1.0 and nobody wins anything — the finale falls flat.
 - The amount you may add is capped at `1000 − already staked this question`.
 
-## 4. Pricing and payout — `pari_formules.pdf` is authoritative
+## 4. Pricing and payout — `auramaxx_paper.pdf` is authoritative
 
 Do not re-derive these. Summary only:
 

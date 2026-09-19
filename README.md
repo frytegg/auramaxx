@@ -23,6 +23,18 @@ before this weekend, is the demo.
 Winners are paid in **real testnet MON**, in a single transaction shown on the projector. The
 more AURA you farm, the more you take home.
 
+### The conversion rate
+
+**100 AURA of profit = 1 MON.**
+
+Only *profit* converts, never your balance: you are credited 1,000 fresh AURA at each question,
+and what counts is the AURA you took off everyone else. Farm 1,000 AURA of profit and 10 testnet
+MON land in your wallet. There is no cap — the biggest farmer of the night takes whatever they
+earned.
+
+At the end you can export your wallet's private key, so you leave with the MON and a wallet that
+is genuinely yours. It is testnet: it is worth nothing in real money, and that is said out loud.
+
 ## How it works
 
 ```
@@ -54,7 +66,7 @@ Solidity + Foundry · TypeScript · viem · fastify + WebSocket · React + Vite 
 | File | What it is |
 |---|---|
 | [`SPEC.md`](SPEC.md) | the full specification, and every decision with its reason |
-| [`pari_formules.pdf`](pari_formules.pdf) | the pricing and payout maths (parimutuel, integer-only) |
+| [`auramaxx_paper.pdf`](auramaxx_paper.pdf) | the pricing and payout maths (parimutuel, integer-only) |
 | [`PITCH.md`](PITCH.md) | the technical annex, including what we measured on testnet |
 | [`TASKS.md`](TASKS.md) | the build plan, hour by hour |
 | [`CLAUDE.md`](CLAUDE.md) | the Monad-specific rules the code has to respect |
