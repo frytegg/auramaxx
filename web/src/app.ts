@@ -7,7 +7,7 @@
  * viem's generatePrivateKey uses crypto.getRandomValues, which — unlike crypto.subtle — also
  * works over plain http, so a LAN fallback does not break the wallet.
  */
-import { AVATARS } from './avatars.js'
+import { AVATAR_COUNT, avatarHtml, avatarImg, avatarIndex } from './avatars.js'
 import { encodePacked, keccak256, type Address, type Hex } from 'viem'
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
 import { JOIN_URL, WS_URL, api } from './api.js'
@@ -49,7 +49,8 @@ let myDown = 0
 let myStake = 0
 let aura = 1000
 let nonce = Number(localStorage.getItem('auramaxx.nonce') ?? '0')
-let avatar = Number(localStorage.getItem('auramaxx.avatar') ?? '0')
+// a phone that played with the old emoji set may remember an index past the pictures we have
+let avatar = avatarIndex(Number(localStorage.getItem('auramaxx.avatar') ?? '0'))
 let seq = -1
 let wakeLock: WakeLockSentinel | null = null
 let manche = 0
@@ -63,17 +64,20 @@ function setQuestion(): void {
 // --- join screen -------------------------------------------------------------------------
 
 const avatarGrid = $('avatars')
-AVATARS.forEach((emoji, index) => {
-  const cell = document.createElement('div')
+avatarGrid.style.setProperty('--cols', String(AVATAR_COUNT))
+for (let index = 0; index < AVATAR_COUNT; index++) {
+  const cell = document.createElement('button')
+  cell.type = 'button'
   cell.className = `avatar${index === avatar ? ' sel' : ''}`
-  cell.textContent = emoji
+  cell.setAttribute('aria-label', `Avatar ${index + 1}`)
+  cell.append(avatarImg(index))
   cell.addEventListener('click', () => {
     avatar = index
     localStorage.setItem('auramaxx.avatar', String(index))
     for (const [i, node] of [...avatarGrid.children].entries()) node.classList.toggle('sel', i === index)
   })
   avatarGrid.append(cell)
-})
+}
 
 const nameInput = $('name') as HTMLInputElement
 nameInput.value = localStorage.getItem(STORAGE_NAME) ?? ''
@@ -82,7 +86,7 @@ $('go').addEventListener('click', () => {
   const name = nameInput.value.trim().slice(0, 12) || 'anon'
   localStorage.setItem(STORAGE_NAME, name)
   $('meName').textContent = name
-  $('meAvatar').textContent = AVATARS[avatar] ?? '🦊'
+  $('meAvatar').replaceChildren(avatarImg(avatar))
   send({ type: 'join', address: account.address, name, avatar })
   show('vGame')
 })
@@ -276,7 +280,7 @@ function handle(msg: Record<string, unknown>): void {
         if (selectedSide === null && myStake > 0) selectedSide = myUp >= myDown ? 0 : 1
         $('meAura').textContent = String(aura)
         $('meName').textContent = String(you.name ?? '')
-        $('meAvatar').textContent = AVATARS[Number(you.avatar ?? 0)] ?? '🦊'
+        $('meAvatar').replaceChildren(avatarImg(Number(you.avatar ?? 0)))
       }
       applyRound(msg.round as Record<string, unknown> | null)
       updateStatus()
@@ -434,7 +438,7 @@ function renderBoard(rows: Array<Record<string, unknown>> | undefined, myProfit:
     .slice(0, 5)
     .map((row, i) => {
       const name = String(row.name ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
-      return `<div class="row"><span>${i + 1}. ${AVATARS[Number(row.avatar ?? 0)] ?? ''} ${name}</span><span class="aura">${String(row.profit ?? 0)}</span></div>`
+      return `<div class="row"><span>${i + 1}. <span class="av">${avatarHtml(Number(row.avatar ?? 0))}</span> ${name}</span><span class="aura">${String(row.profit ?? 0)}</span></div>`
     })
     .join('')
   $('resultBoard').innerHTML = `${html}<div class="row" style="margin-top:8px;opacity:.8"><span>you</span><span class="aura">${myProfit}</span></div>`

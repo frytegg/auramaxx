@@ -31,3 +31,7 @@ contracts/broadcast/
 # Demo captures (kept locally, never published — we told the room nothing is recorded)
 recordings/
 pinault.jpg
+
+# Source pictures for the avatars, kept local. web/scripts/make_avatars.py builds the small
+# web/public/avatars/<index>.webp files the app actually ships.
+/avatar/

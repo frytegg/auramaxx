@@ -7,7 +7,7 @@
  * OVER / UNDER), and the controls are the ticket on the right, which only ever offers the next step.
  * Nothing here is drawn from anything but a server message: no number on this page is made up.
  */
-import { avatarOf } from './avatars.js'
+import { avatarHtml } from './avatars.js'
 import { WS_URL, api } from './api.js'
 
 function $<T extends HTMLElement = HTMLElement>(id: string): T {
@@ -343,7 +343,7 @@ function handle(msg: Msg): void {
     }
     case 'joined': {
       s.players = num(msg.total, s.players)
-      log(`${avatarOf(num(msg.avatar, 0))} ${String(msg.name ?? 'anon')} joined`)
+      log(`${String(msg.name ?? 'anon')} joined`)
       break
     }
     case 'open': {
@@ -765,7 +765,7 @@ function drawLeaderboard(): void {
       : rows
           .map(
             (row, i) =>
-              `<div class="lrow"><span class="rank">${i + 1}</span><span class="av">${avatarOf(row.avatar)}</span>` +
+              `<div class="lrow"><span class="rank">${i + 1}</span><span class="av">${avatarHtml(row.avatar)}</span>` +
               `<span class="name">${escapeHtml(row.name)}</span>` +
               `<span class="aura${row.profit > 0 ? '' : ' zero'}">${row.profit > 0 ? '+' : ''}${fmt.format(row.profit)} AURA</span>` +
               `<span class="mon">${(row.profit / AURA_PER_MON).toFixed(2)} MON</span></div>`,

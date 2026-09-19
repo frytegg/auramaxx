@@ -28,12 +28,15 @@
       .brand { font-family: 'Anton', sans-serif; font-size: 34px; letter-spacing: 3px; color: var(--magenta); text-align: center; text-shadow: 0 0 24px rgba(255,46,158,.45); }
       .tagline { text-align: center; color: var(--text-dim); font-size: 15px; line-height: 1.5; }
 
-      .avatars { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+      /* the picture avatars: round faces, the chosen one ringed in magenta */
+      .avatars { display: grid; grid-template-columns: repeat(var(--cols, 3), 1fr); gap: 14px; padding: 4px 6px; }
       .avatar {
-        aspect-ratio: 1; border-radius: 18px; background: var(--surface); border: 2px solid var(--border);
-        font-size: 30px; display: grid; place-items: center; cursor: pointer; transition: all .15s ease;
+        aspect-ratio: 1; width: 100%; padding: 4px; border-radius: 50%; background: var(--surface);
+        border: 3px solid var(--border); box-shadow: none; cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease, transform .1s ease;
       }
-      .avatar.sel { border-color: var(--magenta); background: rgba(255,46,158,.14); box-shadow: 0 0 18px rgba(255,46,158,.35); }
+      .avatar.sel { border-color: var(--magenta); background: var(--surface); box-shadow: 0 0 22px rgba(255,46,158,.45); }
+      #meAvatar { display: inline-block; width: 22px; height: 22px; vertical-align: -6px; margin-right: 4px; }
+      .board .av { display: inline-block; width: 24px; height: 24px; vertical-align: -7px; margin: 0 4px; }
 
       input {
         width: 100%; padding: 16px; border-radius: 16px; border: 1px solid var(--border);
@@ -118,7 +121,7 @@
     <!-- game -->
     <section class="view" id="vGame">
       <div class="top">
-        <div class="chip"><span id="meAvatar">🦊</span> <span id="meName">—</span></div>
+        <div class="chip"><span id="meAvatar"></span> <span id="meName">—</span></div>
         <div class="chip"><span class="aura" id="meAura">1000</span> AURA</div>
       </div>
       <div class="question" id="q">Waiting for the round…</div>

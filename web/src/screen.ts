@@ -4,7 +4,7 @@
  */
 import { JOIN_URL, WS_URL, api } from './api.js'
 import { mountMascot } from './avatar.js'
-import { avatarOf } from './avatars.js'
+import { avatarImg } from './avatars.js'
 
 const $ = (id: string): HTMLElement => document.getElementById(id)!
 
@@ -306,7 +306,7 @@ const rosterItems = new Map<string, HTMLElement>()
 function upsertRoster(address: string, name: string, avatar: number): void {
   const existing = rosterItems.get(address)
   if (existing) {
-    existing.querySelector('.av')!.textContent = avatarOf(avatar)
+    existing.querySelector('.av')!.replaceChildren(avatarImg(avatar))
     existing.querySelector('.nm')!.textContent = name
     return
   }
@@ -316,7 +316,7 @@ function upsertRoster(address: string, name: string, avatar: number): void {
   item.className = 'rosterItem'
   const av = document.createElement('span')
   av.className = 'av'
-  av.textContent = avatarOf(avatar)
+  av.append(avatarImg(avatar))
   const label = document.createElement('span')
   label.className = 'nm'
   label.textContent = name // textContent, never innerHTML: these names are typed by the room

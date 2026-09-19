@@ -40,7 +40,8 @@
       }
       .join.off { display: none; }
       .joinQr { display: grid; justify-items: center; gap: 12px; }
-      .join img { width: 280px; height: 280px; background: #fff; padding: 12px; border-radius: 14px; }
+      /* the QR only: a bare `.join img` would also catch the avatars on the lobby wall */
+      .join img#qr { width: 280px; height: 280px; background: #fff; padding: 12px; border-radius: 14px; }
       .joinText { font-size: 26px; font-weight: 800; letter-spacing: .2em; color: var(--magenta); }
       .joinCount { font-size: 20px; opacity: .6; }
 
@@ -52,7 +53,8 @@
         background: rgba(255,255,255,.06); border: 1px solid rgba(255,46,158,.28);
         font-size: 22px; font-weight: 600; animation: pop .35s cubic-bezier(.2,1.4,.4,1);
       }
-      .rosterItem .av { font-size: 28px; line-height: 1; }
+      .rosterItem { padding-left: 8px; }
+      .rosterItem .av { flex: none; width: 44px; height: 44px; }
       @keyframes pop { from { transform: scale(.5); opacity: 0 } to { transform: scale(1); opacity: 1 } }
 
       /* The landing page. Every zone is anchored to an edge or to the centre rather than stacked,

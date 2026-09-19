@@ -132,9 +132,14 @@ export function resetGame(): { gameId: number } {
 
 // --- joining ---------------------------------------------------------------------------
 
+/** The game has five picture avatars (web/src/avatars.ts); the contract stores the index as a uint8. */
+const AVATAR_SLOTS = 5
+
 export function join(address: Address, name: string, avatar: number): Player {
   const clean = name.trim().slice(0, 12) || 'anon'
-  const chosen = avatar % 12
+  // clamp, never trust: a NaN, negative or fractional index would make joinBatch fail to encode,
+  // and the failed batch is requeued at the front — one bad phone would block every later join
+  const chosen = Number.isInteger(avatar) && avatar >= 0 ? avatar % AVATAR_SLOTS : 0
   const existing = players.get(address)
 
   if (existing) {
