@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Aura Max — Régie</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="screen-op">
+  <div style="display: flex; justify-content: space-between; align-items: center; padding: 32px 40px 0;">
+    <span class="font-display" style="font-size: 26px; letter-spacing: 2px; color: var(--magenta);">AURA MAX — Régie</span>
+    <span style="display: inline-flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 8px 16px; font-size: 14px; color: var(--text-dim);">
+      <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--green); display: inline-block;"></span>
+      32 joueurs connectés
+    </span>
+  </div>
+  <div style="flex: 1; display: flex; gap: 28px; padding: 28px 40px 40px;">
+    <div style="flex: 1.4; background: #14101A; border: 1px solid var(--border); border-radius: 20px; padding: 28px; display: flex; flex-direction: column; gap: 20px;">
+      <span style="font-size: 13px; letter-spacing: 2px; color: var(--text-dim); text-transform: uppercase;">Round Aura Max</span>
+      <span class="font-display" data-role="time" style="font-size: 56px; color: var(--text);">—:—</span>
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <button type="button" class="stage-btn" data-stage="launch">1 · Lancer le round (30s)</button>
+        <button type="button" class="stage-btn" data-stage="reveal1">2 · Déclencher Reveal #1 (10s)</button>
+        <button type="button" class="stage-btn" data-stage="reveal2">3 · Déclencher Reveal #2 (20s)</button>
+        <button type="button" class="stage-btn" data-stage="freeze">4 · Freeze &amp; résultat (30s)</button>
+      </div>
+    </div>
+    <div style="flex: 1; background: #14101A; border: 1px solid var(--border); border-radius: 20px; padding: 28px; display: flex; flex-direction: column; gap: 24px;">
+      <span style="font-size: 13px; letter-spacing: 2px; color: var(--text-dim); text-transform: uppercase;">Questions échauffement</span>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <span style="font-size: 15px; color: var(--text);">Question 1 — BTC monte ou descend&nbsp;?</span>
+        <div style="display: flex; gap: 10px;">
+          <button type="button" class="q-btn" data-q="1" data-val="up">Monte</button>
+          <button type="button" class="q-btn" data-q="1" data-val="down">Descend</button>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <span style="font-size: 15px; color: var(--text);">Question 2 — BTC monte ou descend&nbsp;?</span>
+        <div style="display: flex; gap: 10px;">
+          <button type="button" class="q-btn" data-q="2" data-val="up">Monte</button>
+          <button type="button" class="q-btn" data-q="2" data-val="down">Descend</button>
+        </div>
+      </div>
+      <span style="margin-top: auto; font-size: 12px; color: var(--text-faint);">Résolution manuelle — aucun oracle on-chain connecté.</span>
+    </div>
+  </div>
+</div>
+
+<style>
+  .stage-btn {
+    width: 100%; box-sizing: border-box; text-align: left; padding: 16px 18px; border-radius: 14px;
+    border: 2px solid var(--border); font-size: 15px; font-weight: 600; cursor: pointer; transition: all .15s ease;
+    background: transparent; color: var(--text);
+  }
+  .stage-btn.active {
+    background: var(--magenta); color: #170013; border-color: var(--magenta);
+    box-shadow: 0 0 20px rgba(255,46,158,0.4);
+  }
+  .q-btn {
+    flex: 1; padding: 12px 0; border-radius: 12px; border: 2px solid var(--border);
+    font-size: 14px; font-weight: 600; cursor: pointer; background: transparent; color: var(--text);
+  }
+  .q-btn.active { background: var(--magenta); color: #170013; border-color: var(--magenta); }
+</style>
+
+<script>
+  // >>> INTEGRATION POINT <<<
+  // Every stage button here should broadcast a "round:phase" event (e.g. via
+  // WebSocket) to every connected phone AND the two projector pages, rather
+  // than just changing local button state. The warm-up question buttons
+  // should similarly broadcast a manual resolution event that triggers
+  // payouts, since there's no on-chain price oracle wired in for the demo
+  // — this operator is the single source of truth for both.
+  const TIME_LABELS = { idle: '—:—', launch: '00:30', reveal1: '00:20', reveal2: '00:10', freeze: '00:00' };
+  let stage = 'idle';
+  const timeEl = document.querySelector('[data-role="time"]');
+  const stageButtons = document.querySelectorAll('.stage-btn');
+
+  function setStage(next) {
+    stage = next;
+    timeEl.textContent = TIME_LABELS[stage];
+    stageButtons.forEach((btn) => btn.classList.toggle('active', btn.dataset.stage === stage));
+    // e.g. socket.emit('round:phase', { stage });
+  }
+  stageButtons.forEach((btn) => btn.addEventListener('click', () => setStage(btn.dataset.stage)));
+
+  const answers = { 1: null, 2: null };
+  document.querySelectorAll('.q-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const q = btn.dataset.q;
+      answers[q] = btn.dataset.val;
+      document.querySelectorAll(`.q-btn[data-q="${q}"]`).forEach((b) => b.classList.toggle('active', b === btn));
+      // e.g. socket.emit('warmup:resolve', { question: q, result: answers[q] });
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Aura Max — Projection ambiante</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  @keyframes driftDots { 0% { background-position: 0 0, 40px 40px; } 100% { background-position: 160px 160px, 200px 200px; } }
+  @keyframes countPulse { 0%, 100% { text-shadow: 0 0 50px rgba(255,46,158,0.55); } 50% { text-shadow: 0 0 90px rgba(255,46,158,0.9); } }
+</style>
+</head>
+<body>
+<div class="screen-wide">
+  <div style="position: absolute; inset: 0; opacity: 0.5; background-image: radial-gradient(rgba(255,46,158,0.35) 2px, transparent 2.5px), radial-gradient(rgba(255,46,158,0.18) 2px, transparent 2.5px); background-size: 80px 80px, 120px 120px; animation: driftDots 14s linear infinite;"></div>
+  <div style="position: relative; display: flex; justify-content: space-between; align-items: center; padding: 48px 64px 0;">
+    <span class="wordmark" style="font-size: 30px; letter-spacing: 5px;">AURA</span>
+    <span style="font-size: 15px; letter-spacing: 2px; color: var(--text-dim); text-transform: uppercase;">Round en cours</span>
+  </div>
+  <div style="position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;">
+    <span style="font-size: 18px; letter-spacing: 4px; color: var(--text-dim); text-transform: uppercase;">Le round est lancé</span>
+    <span class="font-display" data-role="count" style="font-size: 300px; line-height: 0.9; color: var(--magenta); animation: countPulse 1.6s ease-in-out infinite;">30</span>
+    <span style="font-size: 22px; color: var(--text);">Bascule UP ou DOWN sur ton téléphone</span>
+  </div>
+  <div style="position: relative; padding: 0 64px 48px;">
+    <div style="height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden;">
+      <div data-role="progress" style="height: 100%; width: 0%; background: var(--magenta); transition: width 1s linear;"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // >>> INTEGRATION POINT <<<
+  // This countdown is a local 30s timer for preview purposes. Drive it from
+  // the same server-synced round clock the operator panel starts
+  // (operateur/index.html "Lancer le round"), e.g. via WebSocket, so this
+  // screen, every player's phone, and the two reveal screens below all
+  // agree on the exact second. When the clock hits 20s / 10s remaining,
+  // this page should navigate to projo/reveal.html (that screen is reused
+  // for both reveal moments, driven by whatever multiplier/percentages the
+  // backend sends) and then to a freeze state at 0s.
+  const ROUND_LENGTH = 30;
+  let timeLeft = ROUND_LENGTH;
+  const countEl = document.querySelector('[data-role="count"]');
+  const progressEl = document.querySelector('[data-role="progress"]');
+  const timer = setInterval(() => {
+    timeLeft = Math.max(0, timeLeft - 1);
+    countEl.textContent = timeLeft;
+    progressEl.style.width = Math.round(((ROUND_LENGTH - timeLeft) / ROUND_LENGTH) * 100) + '%';
+    if (timeLeft <= 0) clearInterval(timer);
+  }, 1000);
+</script>
+</body>
+</html>

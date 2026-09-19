@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Aura Max — Reveal (projection)</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  @keyframes driftDots2 { 0% { background-position: 0 0, 40px 40px; } 100% { background-position: 160px 160px, 200px 200px; } }
+  @keyframes numberPulseBig { 0%, 100% { text-shadow: 0 0 60px rgba(255,46,158,0.65); transform: scale(1); } 50% { text-shadow: 0 0 120px rgba(255,46,158,1); transform: scale(1.02); } }
+</style>
+</head>
+<body>
+<div class="screen-wide">
+  <div style="position: absolute; inset: 0; opacity: 0.22; background-image: radial-gradient(rgba(255,46,158,0.35) 2px, transparent 2.5px), radial-gradient(rgba(255,46,158,0.18) 2px, transparent 2.5px); background-size: 80px 80px, 120px 120px; animation: driftDots2 14s linear infinite;"></div>
+  <div style="position: relative; display: flex; justify-content: space-between; align-items: center; padding: 44px 64px 0;">
+    <span data-role="badge" style="background: var(--magenta); color: #170013; border-radius: 999px; padding: 9px 22px; font-size: 16px; font-weight: 700; letter-spacing: 1px;">REVEAL #2 · 20S</span>
+    <span class="wordmark" style="font-size: 24px; letter-spacing: 3px;">AURA</span>
+  </div>
+  <div style="position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center;">
+    <span class="font-display" data-role="paie" style="font-size: 52px; letter-spacing: 2px; color: var(--text);">DOWN PAIE</span>
+    <span class="font-display" data-role="mult" style="font-size: 340px; line-height: 0.9; color: var(--magenta); animation: numberPulseBig 1.3s ease-in-out infinite;">×2,6</span>
+    <span style="font-size: 22px; letter-spacing: 3px; color: var(--text-dim); text-transform: uppercase;">En ce moment</span>
+    <span data-role="split" style="margin-top: 28px; font-size: 18px; color: var(--text-faint);">62% UP · 38% DOWN</span>
+  </div>
+</div>
+
+<!--
+  >>> INTEGRATION POINT <<<
+  This screen is reused for both reveal moments (t=10s "REVEAL #1" and
+  t=20s "REVEAL #2") per the multiplier-first design rule: the number
+  everyone reacts to is the leading multiplier, not a % chart. All four
+  data-role fields (badge, paie, mult, split) should be populated from the
+  live pool split the backend broadcasts when a reveal fires — read a
+  ?reveal=1|2 query param or a WebSocket event to pick which badge/timer
+  label to show, e.g.:
+
+    const params = new URLSearchParams(location.search);
+    const revealNumber = params.get('reveal') || '2';
+    document.querySelector('[data-role="badge"]').textContent =
+      revealNumber === '1' ? 'REVEAL #1 · 10S' : 'REVEAL #2 · 20S';
+-->
+</body>
+</html>

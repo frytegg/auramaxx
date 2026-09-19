@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aura Max — Question 1</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="screen-phone">
+  <div style="display: flex; justify-content: space-between; align-items: center; padding: 24px 24px 0;">
+    <span class="wordmark" style="font-size: 18px;">AURA</span>
+    <span class="balance-chip">1000 $AURA</span>
+  </div>
+  <div style="padding: 18px 24px 0;">
+    <span style="background: var(--surface-2); border-radius: 999px; padding: 6px 14px; font-size: 12px; letter-spacing: 1px; color: var(--text-dim);">QUESTION 1/2 · ÉCHAUFFEMENT</span>
+  </div>
+  <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 30px; padding: 28px;">
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <h1 class="font-display" style="margin: 0; font-size: 34px; line-height: 1.1;">BTC monte ou descend dans la minute&nbsp;?</h1>
+      <p style="margin: 0; color: var(--text-dim); font-size: 15px; line-height: 1.5;">Mise classique — personne dans la salle ne contrôle le résultat.</p>
+    </div>
+
+    <div id="mise-root"></div>
+
+    <div style="display: flex; gap: 14px;">
+      <button type="button" class="toggle-btn active" data-camp="up" id="btn-up" style="font-size:19px;padding:18px 0;">UP</button>
+      <button type="button" class="toggle-btn" data-camp="down" id="btn-down" style="font-size:19px;padding:18px 0;">DOWN</button>
+    </div>
+  </div>
+  <div style="padding: 24px 28px 36px;">
+    <a href="mise.html" class="btn-cta">Valider mon pari</a>
+  </div>
+</div>
+
+<script type="module">
+  import { createMiseWidget } from '../assets/chip-mise.js';
+
+  createMiseWidget(document.getElementById('mise-root'), {
+    chipSize: 54,
+    maxBalance: 1000,
+    initialStack: [200],
+    onChange: (state) => {
+      // >>> INTEGRATION POINT <<<
+      // state.total is the player's current stake in $AURA for this warm-up
+      // question. Persist it (session/store) and, once you have a backend,
+      // submit it as the player's entry in the pari-mutuel pool.
+      try { sessionStorage.setItem('auraMax.warmup1.stake', JSON.stringify(state)); } catch (e) {}
+    },
+  });
+
+  // Simple UP/DOWN toggle, no cooldown on this screen (matches the design —
+  // the cooldown only applies once the live round starts on Toggle/Reveal).
+  const upBtn = document.getElementById('btn-up');
+  const downBtn = document.getElementById('btn-down');
+  function setCamp(camp) {
+    upBtn.classList.toggle('active', camp === 'up');
+    downBtn.classList.toggle('active', camp === 'down');
+    try { sessionStorage.setItem('auraMax.warmup1.camp', camp); } catch (e) {}
+  }
+  upBtn.addEventListener('click', () => setCamp('up'));
+  downBtn.addEventListener('click', () => setCamp('down'));
+</script>
+</body>
+</html>
