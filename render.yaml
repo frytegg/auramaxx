@@ -6,12 +6,17 @@ services:
     runtime: node
     plan: free
     region: frankfurt
-    buildCommand: corepack enable && pnpm -C web install --no-frozen-lockfile && pnpm -C web build && pnpm -C server install --no-frozen-lockfile && pnpm -C server build
+    # NOT corepack: the version bundled with Node ships a stale npm signing-key list and fails
+    # with "Cannot find matching keyid". Installing pnpm straight from the registry avoids it.
+    buildCommand: npm i -g pnpm@10.19.0 && pnpm -C web install --no-frozen-lockfile && pnpm -C web build && pnpm -C server install --no-frozen-lockfile && pnpm -C server build
     startCommand: node server/dist/server.js
     healthCheckPath: /health
     envVars:
       - key: NODE_VERSION
         value: "22.12.0"
+      # belt and braces if anything still reaches for corepack
+      - key: COREPACK_INTEGRITY_KEYS
+        value: "0"
       - key: CHAIN_ID
         value: "10143"
       - key: RPC_URL
