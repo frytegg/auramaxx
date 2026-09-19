@@ -42,25 +42,35 @@
       .joinText { font-size: 26px; font-weight: 800; letter-spacing: .2em; color: var(--magenta); }
       .joinCount { font-size: 20px; opacity: .6; }
 
-      /* the landing page: nothing happens, and no QR is shown, until someone starts a game */
+      /* The landing page. Every zone is anchored to an edge or to the centre rather than stacked,
+         so the whole thing is guaranteed to fit any 16:9 projector without a scrollbar. */
       .lobby {
-        position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; text-align: center;
+        position: fixed; inset: 0; z-index: 30; overflow: hidden; text-align: center;
         background: radial-gradient(90% 70% at 50% -10%, #2B0F52 0%, #0B0710 65%) fixed, #0B0710;
       }
       .lobby.off { display: none; }
-      .lobbyBrand { font-family: 'Anton', sans-serif; font-size: 112px; letter-spacing: 8px; color: var(--magenta); line-height: 1; }
-      .lobbyTag { font-size: 28px; opacity: .75; margin-top: 14px; }
-      .mascot { width: min(860px, 74vw); margin: 2px auto -6px; }
-      .mascot svg { width: 100%; height: auto; display: block; overflow: visible; }
+      .lobbyTop { position: absolute; top: 11vh; left: 0; right: 0; z-index: 2; }
+      .lobbyMid { position: absolute; top: 50%; left: 0; right: 0; transform: translateY(-50%); z-index: 2; }
+      .lobbyBot { position: absolute; bottom: 9vh; left: 0; right: 0; z-index: 2; }
+      .lobbyBrand { font-family: 'Anton', sans-serif; font-size: 9vh; letter-spacing: 8px; color: var(--magenta); line-height: 1; }
+      .lobbyTag { font-size: 2.6vh; opacity: .75; margin-top: 1.4vh; }
+
+      /* z-index 1 puts him under the button: he walks behind it. Anchored left and moved by a
+         transform the script writes, so he starts and ends fully off screen. */
+      .mascot {
+        position: absolute; left: 0; top: 50%; height: 56vh; margin-top: -28vh;
+        z-index: 1; pointer-events: none; will-change: transform;
+      }
+      .mascot svg { height: 100%; width: auto; display: block; overflow: visible; }
       .start {
-        margin-top: 8px; padding: 22px 64px; border: 0; border-radius: 999px; cursor: pointer;
+        padding: 22px 64px; border: 0; border-radius: 999px; cursor: pointer;
         font-family: 'Anton', sans-serif; font-size: 40px; letter-spacing: 2px; color: #0B0710;
         background: var(--magenta); box-shadow: 0 0 60px rgba(255,46,158,.45);
         transition: transform .12s ease, box-shadow .12s ease;
       }
       .start:hover { transform: translateY(-2px); box-shadow: 0 0 80px rgba(255,46,158,.65); }
       .start:disabled { opacity: .45; cursor: default; transform: none; }
-      .lobbyNote { margin-top: 26px; font-size: 20px; opacity: .55; }
+      .lobbyNote { font-size: 2.1vh; opacity: .55; }
       .lobbyNote.err { color: var(--down); opacity: 1; }
 
       .side { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
@@ -141,11 +151,15 @@
     </div>
 
     <div class="lobby" id="lobby">
-      <div>
+      <div class="mascot" id="mascot"></div>
+      <div class="lobbyTop">
         <div class="lobbyBrand">AURAMAXX</div>
         <div class="lobbyTag">Bet on the room. The camera settles it.</div>
-        <div class="mascot" id="mascot"></div>
+      </div>
+      <div class="lobbyMid">
         <button class="start" id="startBtn">Start a game</button>
+      </div>
+      <div class="lobbyBot">
         <div class="lobbyNote" id="startNote">Two rounds · 1000 AURA each · Winners are paid in MON</div>
       </div>
     </div>

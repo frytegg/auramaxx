@@ -57,10 +57,9 @@ let mounted = 0
 
 function markup(uid: string): string {
   return `
-<!-- The viewBox is cropped tight to the character on purpose. On screen his height works out to
-     (container width x 299 / viewBox width), so for a fixed slot in the page layout only the
-     viewBox HEIGHT sets how big he looks — the width just buys travel. -->
-<svg id="ax-svg" viewBox="0 14 620 334" role="img" aria-label="A dancing mascot">
+<!-- Cropped to the character and nothing else. Crossing the screen is done by translating the
+     HOST element, so how far he walks can never change how big he is. -->
+<svg id="ax-svg" viewBox="20 14 180 334" role="img" aria-label="A dancing mascot">
   <defs>
     <radialGradient id="ax-glow-${uid}" cx="50%" cy="50%" r="50%">
       <stop offset="0%" stop-color="${MAGENTA}" stop-opacity=".30" />
@@ -70,7 +69,7 @@ function markup(uid: string): string {
 
   <g id="ax-slide">
     <ellipse id="ax-shadow" cx="110" cy="336" rx="52" ry="11" fill="${INK}" opacity=".45" />
-    <ellipse cx="110" cy="190" rx="150" ry="160" fill="url(#ax-glow-${uid})" />
+    <ellipse cx="110" cy="180" rx="105" ry="150" fill="url(#ax-glow-${uid})" />
 
     <g id="ax-bob">
       <g id="ax-lean">
@@ -217,38 +216,22 @@ function auraFarm(beat: number): Pose {
   }
 }
 
-function lerp(a: number, b: number, t: number): number {
-  return a + (b - a) * t
-}
-
-function blend(a: Pose, b: Pose, t: number): Pose {
-  const out = {} as Pose
-  for (const key of Object.keys(a) as Array<keyof Pose>) out[key] = lerp(a[key], b[key], t)
-  return out
-}
-
-/** 0 -> 1 with flat ends, so a dance change eases instead of snapping. */
-function smoothstep(edge0: number, edge1: number, x: number): number {
-  const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)))
-  return t * t * (3 - 2 * t)
-}
-
 // --- the loop ------------------------------------------------------------------------------
 
 const BEAT_MS = 462 // ~130 BPM
-const BARS = 16 // beats per full round trip: 8 of one dance, 8 of the other
-const SLIDE = 165 // how far it travels either side of centre
-const BASE_X = 200 // the character is drawn near x=110; this centres it in the 620-wide stage
+/** Beats to walk the whole screen, and the pause spent off stage at each end. The page opens on
+ *  a WAIT, so the room sees a clean title for a second before he bursts in from the left. */
+const CROSS = 14
+const WAIT = 3
+const CYCLE = (CROSS + WAIT) * 2
 const FEET = 330 // squash and stretch has to happen about the floor, not about the SVG origin
 
 export type Mascot = { start: () => void; stop: () => void }
 
 /** A mounted character whose joints can be driven directly. Separated from the loop so poses can
  *  be rendered one at a time for inspection, rather than only ever flashing past at 130 BPM. */
-export type Rig = { apply: (pose: Pose, x: number) => void }
+export type Rig = { apply: (pose: Pose) => void }
 
-export const DANCES = { sixSeven, auraFarm }
-export { blend }
 export type { Pose }
 
 export function mountRig(host: HTMLElement): Rig {
@@ -275,8 +258,7 @@ export function mountRig(host: HTMLElement): Rig {
   }
 
   return {
-    apply: (pose: Pose, x: number): void => {
-      slide.setAttribute('transform', `translate(${x.toFixed(2)},0)`)
+    apply: (pose: Pose): void => {
       bob.setAttribute(
         'transform',
         `translate(0,${pose.bob.toFixed(2)}) translate(0,${FEET}) scale(1,${pose.squash.toFixed(3)}) translate(0,${-FEET})`,
@@ -300,16 +282,19 @@ export function mountRig(host: HTMLElement): Rig {
   }
 }
 
-/** The pose and stage position at a given beat: 6-7 one way, aura farming back. */
-export function poseAt(beat: number): { pose: Pose; x: number } {
-  const u = (beat / BARS) % 1 // 0..1 across the round trip
-  // rising then falling gives a flat 1 in the middle, so each dance is seen pure rather than
-  // permanently half-blended into the other
-  const toAura = smoothstep(0.44, 0.52, u) - smoothstep(0.94, 1.0, u)
-  return {
-    pose: blend(sixSeven(beat), auraFarm(beat), toAura),
-    x: BASE_X - Math.cos(2 * Math.PI * u) * SLIDE,
-  }
+/**
+ * Pose, and how far across the screen he is: `p` runs 0 (just off the left edge) to 1 (just off
+ * the right). He does the 6-7 on the way out and aura farming on the way back.
+ *
+ * The dance swaps during a WAIT, while he is off stage — so the two never have to be cross-faded
+ * into each other, and each is only ever seen pure.
+ */
+export function poseAt(beat: number): { pose: Pose; p: number } {
+  const b = ((beat % CYCLE) + CYCLE) % CYCLE
+  if (b < WAIT) return { pose: sixSeven(beat), p: 0 }
+  if (b < WAIT + CROSS) return { pose: sixSeven(beat), p: (b - WAIT) / CROSS }
+  if (b < 2 * WAIT + CROSS) return { pose: auraFarm(beat), p: 1 }
+  return { pose: auraFarm(beat), p: 1 - (b - (2 * WAIT + CROSS)) / CROSS }
 }
 
 /**
@@ -323,8 +308,16 @@ export function mountMascot(host: HTMLElement): Mascot {
 
   function frame(now: number): void {
     if (!startedAt) startedAt = now
-    const { pose, x } = poseAt((now - startedAt) / BEAT_MS)
-    rig.apply(pose, x)
+    const { pose, p } = poseAt((now - startedAt) / BEAT_MS)
+    rig.apply(pose)
+
+    // Travel lives on the host's own transform rather than inside the SVG. Measured each frame so
+    // the walk still starts and ends fully off screen after a resize or a projector swap.
+    const own = host.offsetWidth
+    const stage = host.parentElement?.clientWidth ?? window.innerWidth
+    const x = -own - 40 + p * (stage + own + 80)
+    host.style.transform = `translateX(${x.toFixed(1)}px)`
+
     raf = requestAnimationFrame(frame)
   }
 
@@ -337,6 +330,7 @@ export function mountMascot(host: HTMLElement): Mascot {
       if (!raf) return
       cancelAnimationFrame(raf)
       raf = 0
+      startedAt = 0
     },
   }
 }
