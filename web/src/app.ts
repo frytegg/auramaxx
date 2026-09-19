@@ -216,6 +216,7 @@ function backToJoin(): void {
   $('meAvatar').replaceChildren()
   $('walletBox').style.display = 'none'
   $('finalRank').classList.remove('on')
+  $('resultNet').textContent = ''
   setTick('idle')
   setQuestion()
   setHidden(true)
@@ -588,6 +589,7 @@ function handle(msg: Record<string, unknown>): void {
       $('resultBig').style.color =
         myStake === 0 ? '#888' : verdict === 'WON' ? 'var(--up)' : verdict === 'SPLIT' ? 'var(--gold)' : 'var(--down)'
       const label = winner === 0 ? 'OVER' : 'UNDER'
+      showNet(label, winner, onWinner, onLoser, Number(msg.poolUp ?? 0), Number(msg.poolDown ?? 0))
       const outcome = `${label} · ${String(msg.count ?? 0)} light-ups counted, line ${lineText(Number(msg.threshold ?? 0))} · round ${manche}/2`
       // sitting a round out is not losing it: say which of the two it was
       const why = myStake > 0 ? '' : Number(msg.bettors ?? -1) === 0 ? 'Nobody bet this round · ' : 'You sat this round out · '
@@ -613,6 +615,7 @@ function handle(msg: Record<string, unknown>): void {
     }
     case 'payout': {
       const sent = typeof msg.txHash === 'string'
+      $('resultNet').textContent = '' // the last round's line does not belong under the payout
       $('resultBig').textContent = sent ? 'PAID' : 'NO PAYOUT'
       $('resultBig').style.color = 'var(--magenta)'
       // nothing owed means nothing sent: never announce a payment that did not happen
@@ -626,6 +629,40 @@ function handle(msg: Record<string, unknown>): void {
     }
     default:
       break
+  }
+}
+
+/**
+ * What the round did to this player's AURA, computed exactly as Auramaxx._payRange does: the
+ * winning leg times the pot over the winning pool, rounded down, against everything put in on both
+ * sides. The score only ever takes a net gain: a switch that lost overall leaves it where it was.
+ */
+function showNet(label: string, winner: 0 | 1, onWinner: number, onLoser: number, poolUp: number, poolDown: number): void {
+  const box = $('resultNet')
+  box.className = 'net'
+  const staked = onWinner + onLoser
+  if (staked === 0) {
+    box.textContent = ''
+    return
+  }
+  const total = poolUp + poolDown
+  const winningPool = winner === 0 ? poolUp : poolDown
+  // nobody backed the winner: the contract hands every stake back
+  const back = winningPool === 0 ? staked : Math.floor((onWinner * total) / winningPool)
+  const net = back - staked
+  box.classList.add(net > 0 ? 'gain' : net < 0 ? 'loss' : 'even')
+  if (winningPool === 0) {
+    box.textContent = `Nobody backed ${label}: your ${staked} AURA come back`
+  } else if (onLoser === 0) {
+    box.textContent = `${label} paid ${back} on your ${staked} · +${net} AURA to your score`
+  } else if (onWinner === 0) {
+    box.textContent = `−${staked} AURA`
+  } else {
+    // both sides: one leg paid, the other was lost, and only a net gain reaches the score
+    box.textContent =
+      net > 0
+        ? `${label} paid ${back} · you had ${staked} in on both sides · +${net} AURA to your score`
+        : `${label} paid ${back} · you had ${staked} in on both sides · ${net} AURA, your score stays put`
   }
 }
 

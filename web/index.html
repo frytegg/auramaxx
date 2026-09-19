@@ -110,6 +110,9 @@
       .result { text-align: center; }
       .result .big { font-family: 'Anton', sans-serif; font-size: 76px; letter-spacing: .03em; }
       .result .sub { font-size: 16px; color: var(--text-dim); margin-top: 8px; }
+      .result .net { font-size: 19px; font-weight: 700; margin-top: 6px; font-variant-numeric: tabular-nums; }
+      .result .net.gain { color: var(--up); }
+      .result .net.loss { color: var(--down); }
       .board { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 10px 16px; }
       .board .row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 16px; border-bottom: 1px solid var(--border); }
       .board .row:last-child { border-bottom: none; }
@@ -185,6 +188,7 @@
       <div class="spacer"></div>
       <div class="result">
         <div class="big" id="resultBig">—</div>
+        <div class="net" id="resultNet"></div>
         <div class="sub" id="resultSub"></div>
         <div class="finalRank" id="finalRank"></div>
       </div>
