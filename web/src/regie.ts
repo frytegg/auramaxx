@@ -3,9 +3,9 @@
  * state shown here comes from the same WebSocket the phones use, so the operator sees exactly
  * what the room sees. Reveals pause the round on the server: "Reprendre" is what restarts it.
  */
+import { AVATARS } from './avatars.js'
 import { JOIN_URL, WS_URL, api } from './api.js'
 const $ = (id: string): HTMLElement => document.getElementById(id)!
-const AVATARS = ['🦊', '🐸', '👽', '🤖', '🐙', '🦈', '🔥', '💎', '🍄', '👾', '🦍', '🌀']
 const PHASES: Record<string, string> = {
   idle: 'EN ATTENTE',
   open: 'PARIS OUVERTS',

@@ -7,12 +7,12 @@
  * viem's generatePrivateKey uses crypto.getRandomValues, which — unlike crypto.subtle — also
  * works over plain http, so a LAN fallback does not break the wallet.
  */
+import { AVATARS } from './avatars.js'
 import { encodePacked, keccak256, type Address, type Hex } from 'viem'
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
 import { JOIN_URL, WS_URL, api } from './api.js'
 
 const $ = (id: string): HTMLElement => document.getElementById(id)!
-const AVATARS = ['🦊', '🐸', '👽', '🤖', '🐙', '🦈', '🔥', '💎', '🍄', '👾', '🦍', '🌀']
 const STORAGE_KEY = 'auramaxx.key'
 const STORAGE_NAME = 'auramaxx.profile'
 

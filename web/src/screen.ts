@@ -4,6 +4,7 @@
  */
 import { JOIN_URL, WS_URL, api } from './api.js'
 import { mountMascot } from './avatar.js'
+import { avatarOf } from './avatars.js'
 
 const $ = (id: string): HTMLElement => document.getElementById(id)!
 
@@ -120,6 +121,7 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       const round = msg.round as Record<string, unknown> | null
       if (round) applyRound(round)
       setPlayers(Number(msg.players ?? 0))
+      renderRoster(msg.roster as Array<{ name?: unknown; avatar?: unknown }>)
       // a reload must land back on the stage the game is actually in, not on the landing page
       // (betting happens before the clock, so an open round still shows the join QR)
       setStage(Number(msg.gameId ?? 0) === 0 ? 'lobby' : (manche === 0 && !round) || round?.phase === 'open' ? 'join' : 'game')
@@ -133,6 +135,7 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       $('liveCount').textContent = '—'
       $('liveThreshold').textContent = '?'
       $('clock').textContent = '—'
+      renderRoster(undefined) // a fresh game starts with an empty wall
       // gameId 0 is the régie sending everyone back to the landing page
       setStage(Number(msg.gameId ?? 1) === 0 ? 'lobby' : 'join')
       hideFlash()
@@ -203,6 +206,7 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
     }
     case 'joined': {
       setPlayers(Number(msg.total ?? 0))
+      addToRoster(String(msg.name ?? ''), Number(msg.avatar ?? 0))
       break
     }
     case 'gas': {
@@ -289,7 +293,35 @@ qr.src = api(`/api/qr.svg?url=${encodeURIComponent(JOIN_URL)}`)
 /** Two places show the count: the header all game long, and the join screen while people arrive. */
 function setPlayers(total: number): void {
   $('players').textContent = String(total)
-  $('joinPlayers').textContent = String(total)
+  $('joinCount').textContent =
+    total === 0 ? 'No players yet' : total === 1 ? '1 player joined' : `${total} players joined`
+}
+
+/** The lobby wall. Arrivals are appended one at a time so each name pops in on its own. */
+function addToRoster(name: string, avatar: number): void {
+  const empty = $('roster').querySelector('.rosterEmpty')
+  if (empty) empty.remove()
+  const item = document.createElement('div')
+  item.className = 'rosterItem'
+  const av = document.createElement('span')
+  av.className = 'av'
+  av.textContent = avatarOf(avatar)
+  const label = document.createElement('span')
+  label.textContent = name // textContent, never innerHTML: these names come from the room
+  item.append(av, label)
+  $('roster').append(item)
+}
+
+function renderRoster(rows: Array<{ name?: unknown; avatar?: unknown }> | undefined): void {
+  $('roster').innerHTML = ''
+  if (!rows || rows.length === 0) {
+    const hint = document.createElement('div')
+    hint.className = 'rosterEmpty'
+    hint.textContent = 'Waiting for players…'
+    $('roster').append(hint)
+    return
+  }
+  for (const row of rows) addToRoster(String(row.name ?? ''), Number(row.avatar ?? 0))
 }
 
 void fetch(api('/api/config'))

@@ -393,6 +393,15 @@ export async function payout(): Promise<{ hash: Hex; total: number; winners: num
   return { hash: result.hash, total, winners: winners.length }
 }
 
+/**
+ * Everyone who has joined, in arrival order, for the projector's lobby wall. Separate from the
+ * leaderboard, which is sorted by profit and capped at 20: here the whole room has to appear, and
+ * seeing your own name land is the point.
+ */
+export function roster(): Array<{ name: string; avatar: number }> {
+  return [...players.values()].map((p) => ({ name: p.name, avatar: p.avatar }))
+}
+
 export function leaderboard(): Array<{ name: string; avatar: number; profit: number; address: Address }> {
   return [...players.values()]
     .map((p) => ({ name: p.name, avatar: p.avatar, profit: p.profit, address: p.address }))
@@ -443,6 +452,7 @@ export function snapshot(address?: Address): Record<string, unknown> {
         }
       : null,
     leaderboard: leaderboard(),
+    roster: roster(),
     price: currentPrice(),
     priceHistory: priceHistory(Date.now() - 120_000),
   }
