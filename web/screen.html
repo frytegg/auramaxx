@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AURAMAXX — screen</title>
+    <style>
+      :root { color-scheme: dark; --magenta: #FF00E5; --up: #3bf59b; --down: #ff5c7a; }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        background: #07070d; color: #e9e9f2; overflow: hidden; height: 100vh;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      }
+      .screen { height: 100vh; display: grid; grid-template-rows: auto 1fr auto; gap: 18px; padding: 28px 36px; }
+
+      header { display: flex; align-items: baseline; justify-content: space-between; }
+      .brand { font-size: 26px; font-weight: 800; letter-spacing: .22em; color: var(--magenta); }
+      .players { font-size: 20px; opacity: .65; }
+
+      .question { font-size: 54px; font-weight: 800; line-height: 1.05; }
+      .clock { font-size: 92px; font-weight: 800; font-variant-numeric: tabular-nums; }
+      .clock.paused { color: var(--magenta); }
+
+      .main { display: grid; grid-template-columns: 1fr 380px; gap: 26px; min-height: 0; }
+      .chart-wrap { position: relative; border: 1px solid rgba(255,255,255,.08); border-radius: 18px; background: rgba(255,255,255,.02); }
+      canvas { width: 100%; height: 100%; display: block; }
+
+      .side { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+      .pools { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      .pool { border-radius: 16px; padding: 16px; border: 2px solid transparent; background: rgba(255,255,255,.04); }
+      .pool.up { border-color: rgba(59,245,155,.5); }
+      .pool.down { border-color: rgba(255,92,122,.5); }
+      .pool .label { font-size: 15px; letter-spacing: .16em; opacity: .7; }
+      .pool .mult { font-size: 44px; font-weight: 800; font-variant-numeric: tabular-nums; }
+      .pool.up .mult { color: var(--up); }
+      .pool.down .mult { color: var(--down); }
+      .pool .sub { font-size: 15px; opacity: .6; }
+      .hidden-note { text-align: center; padding: 22px; font-size: 19px; opacity: .55; }
+
+      .board { flex: 1; overflow: hidden; border-radius: 16px; background: rgba(255,255,255,.03); padding: 14px 16px; }
+      .board h2 { font-size: 14px; letter-spacing: .18em; opacity: .55; margin-bottom: 10px; font-weight: 600; }
+      .row { display: flex; justify-content: space-between; font-size: 20px; padding: 5px 0; }
+      .row .p { color: var(--magenta); font-variant-numeric: tabular-nums; }
+
+      footer { display: flex; justify-content: space-between; font-size: 15px; opacity: .5; }
+      .flash {
+        position: fixed; inset: 0; display: none; place-items: center; text-align: center;
+        background: rgba(7,7,13,.94); z-index: 20;
+      }
+      .flash.on { display: grid; }
+      .flash .big { font-size: 120px; font-weight: 800; }
+      .flash .sub { font-size: 30px; margin-top: 12px; }
+      .flash .hash { font-size: 17px; opacity: .6; margin-top: 18px; word-break: break-all; }
+    </style>
+  </head>
+  <body>
+    <div class="screen">
+      <header>
+        <div class="brand">AURAMAXX</div>
+        <div class="players"><span id="players">0</span> playing · <span id="phase">idle</span></div>
+      </header>
+
+      <div class="main">
+        <div class="chart-wrap"><canvas id="chart"></canvas></div>
+        <div class="side">
+          <div class="clock" id="clock">—</div>
+          <div class="question" id="question">waiting for the round</div>
+          <div class="pools" id="pools" style="display:none">
+            <div class="pool up">
+              <div class="label">UP</div>
+              <div class="mult" id="multUp">—</div>
+              <div class="sub"><span id="poolUp">0</span> AURA</div>
+            </div>
+            <div class="pool down">
+              <div class="label">DOWN</div>
+              <div class="mult" id="multDown">—</div>
+              <div class="sub"><span id="poolDown">0</span> AURA</div>
+            </div>
+          </div>
+          <div class="hidden-note" id="hiddenNote">bets are hidden until the reveal</div>
+          <div class="board">
+            <h2>AURA FARMED</h2>
+            <div id="leaderboard"></div>
+          </div>
+        </div>
+      </div>
+
+      <footer>
+        <div id="contract">—</div>
+        <div id="gas">—</div>
+      </footer>
+    </div>
+
+    <div class="flash" id="flash">
+      <div>
+        <div class="big" id="flashBig">UP</div>
+        <div class="sub" id="flashSub"></div>
+        <div class="hash" id="flashHash"></div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/screen.ts"></script>
+  </body>
+</html>

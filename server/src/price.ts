@@ -31,6 +31,20 @@ const SOURCES = [
 let last: { price: number; at: number; source: string } | null = null
 let timer: NodeJS.Timeout | null = null
 
+/** Rolling history for the live curve: 2 Hz over ~2.5 minutes. */
+const HISTORY_MAX = 300
+const history: Array<{ t: number; p: number }> = []
+const listeners = new Set<(point: { t: number; p: number }) => void>()
+
+export function onPrice(fn: (point: { t: number; p: number }) => void): () => void {
+  listeners.add(fn)
+  return () => listeners.delete(fn)
+}
+
+export function priceHistory(sinceMs?: number): Array<{ t: number; p: number }> {
+  return sinceMs ? history.filter((h) => h.t >= sinceMs) : [...history]
+}
+
 async function poll(): Promise<void> {
   for (const source of SOURCES) {
     try {
@@ -41,7 +55,12 @@ async function poll(): Promise<void> {
       if (!response.ok) continue
       const price = source.pick(await response.json())
       if (Number.isFinite(price) && price > 0) {
-        last = { price, at: Date.now(), source: source.name }
+        const at = Date.now()
+        last = { price, at, source: source.name }
+        const point = { t: at, p: price }
+        history.push(point)
+        if (history.length > HISTORY_MAX) history.shift()
+        for (const fn of listeners) fn(point)
         return
       }
     } catch (error: unknown) {
@@ -54,7 +73,7 @@ async function poll(): Promise<void> {
 export function startPricePolling(): void {
   if (timer) return
   void poll()
-  timer = setInterval(() => void poll(), 1000)
+  timer = setInterval(() => void poll(), 500) // 2 Hz: smooth enough for a live curve
 }
 
 export function currentPrice(): { price: number; at: number; source: string } | null {

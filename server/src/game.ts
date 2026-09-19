@@ -3,7 +3,7 @@ import { env } from './env.js'
 import { log } from './log.js'
 import { GAS, blockNumber, contract, gasFor, gasSpent, publicClient, send } from './chain.js'
 import { AURAMAXX_ABI } from './abi.js'
-import { currentPrice, priceScaled } from './price.js'
+import { currentPrice, onPrice, priceHistory, priceScaled } from './price.js'
 
 export const BUDGET = 1000
 export const Q1_MS = 30_000
@@ -359,6 +359,8 @@ export function snapshot(address?: Address): Record<string, unknown> {
       ? { name: you.name, avatar: you.avatar, profit: you.profit, side: staked?.side ?? null, staked: staked?.total ?? 0, budget: BUDGET }
       : null,
     leaderboard: leaderboard(),
+    price: currentPrice(),
+    priceHistory: priceHistory(Date.now() - 120_000),
   }
 }
 
@@ -390,6 +392,18 @@ export function multipliers(r: { poolUp: number; poolDown: number }): { up: numb
 // --- the 10 Hz loop ---------------------------------------------------------------------
 
 export function startLoop(): void {
+  // the BTC price is public information, so it streams even while the pools stay hidden
+  onPrice((point) => {
+    const r = round
+    emit({
+      type: 'price',
+      p: point.p,
+      t: point.t,
+      openPrice: r?.kind === 0 ? r.openPrice : null,
+      phase: r?.phase ?? 'idle',
+    })
+  })
+
   setInterval(() => void flushJoins(), 2000)
   setInterval(() => void tickGas(), 15_000)
 
