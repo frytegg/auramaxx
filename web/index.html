@@ -5,83 +5,99 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#07070d" />
     <title>AURAMAXX</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;600;700&display=swap" />
     <style>
+      /* design: frontend/assets/style.css (Aura Max mockups) — magenta palette, Anton + Space Grotesk */
       :root {
         color-scheme: dark;
-        --magenta: #FF00E5; --up: #3bf59b; --down: #ff5c7a; --bg: #07070d; --card: rgba(255,255,255,.06);
+        --magenta: #FF2E9E; --magenta-soft: #FF8FD4; --up: #35E28C; --down: #FF4D6A;
+        --bg: #0B0710; --surface: #17101D; --surface-2: #20142A; --border: #2C1E34; --card: var(--surface);
+        --text: #F8F3F7; --text-dim: #AE9AB2; --text-faint: #7A6A7E; --gold: #FFD166;
       }
       * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
       body {
-        background: var(--bg); color: #e9e9f2; min-height: 100dvh; overscroll-behavior: none;
-        font-family: ui-monospace, "SF Mono", Menlo, monospace; user-select: none;
+        background: radial-gradient(120% 60% at 50% -10%, #2B0F52 0%, var(--bg) 60%) fixed, var(--bg);
+        color: var(--text); min-height: 100dvh; overscroll-behavior: none;
+        font-family: 'Space Grotesk', system-ui, sans-serif; user-select: none;
         padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
       }
-      .view { display: none; padding: 20px; min-height: 100dvh; flex-direction: column; gap: 16px; }
+      .view { display: none; padding: 22px 20px; min-height: 100dvh; flex-direction: column; gap: 16px; max-width: 480px; margin: 0 auto; }
       .view.on { display: flex; }
 
-      .brand { font-size: 22px; font-weight: 800; letter-spacing: .24em; color: var(--magenta); text-align: center; }
-      .tagline { text-align: center; opacity: .6; font-size: 14px; line-height: 1.5; }
+      .brand { font-family: 'Anton', sans-serif; font-size: 34px; letter-spacing: 3px; color: var(--magenta); text-align: center; text-shadow: 0 0 24px rgba(255,46,158,.45); }
+      .tagline { text-align: center; color: var(--text-dim); font-size: 15px; line-height: 1.5; }
 
       .avatars { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
       .avatar {
-        aspect-ratio: 1; border-radius: 16px; background: var(--card); border: 2px solid transparent;
-        font-size: 30px; display: grid; place-items: center; cursor: pointer;
+        aspect-ratio: 1; border-radius: 18px; background: var(--surface); border: 2px solid var(--border);
+        font-size: 30px; display: grid; place-items: center; cursor: pointer; transition: all .15s ease;
       }
-      .avatar.sel { border-color: var(--magenta); background: rgba(255,0,229,.14); }
+      .avatar.sel { border-color: var(--magenta); background: rgba(255,46,158,.14); box-shadow: 0 0 18px rgba(255,46,158,.35); }
 
       input {
-        width: 100%; padding: 16px; border-radius: 14px; border: 1px solid rgba(255,255,255,.14);
-        background: #10101a; color: #fff; font: 600 20px ui-monospace, monospace; text-align: center;
+        width: 100%; padding: 16px; border-radius: 16px; border: 1px solid var(--border);
+        background: var(--surface); color: var(--text); font: 600 20px 'Space Grotesk', sans-serif; text-align: center;
       }
+      input::placeholder { color: var(--text-faint); }
       button {
-        border: none; border-radius: 16px; font: inherit; cursor: pointer; color: #07070d;
-        background: var(--magenta); padding: 18px; font-size: 19px; font-weight: 800; width: 100%;
+        border: none; border-radius: 16px; font: inherit; cursor: pointer; color: #170013;
+        background: var(--magenta); padding: 18px; font-size: 18px; font-weight: 700; width: 100%;
+        box-shadow: 0 0 30px rgba(255,46,158,.35); transition: transform .1s ease;
       }
-      button:disabled { opacity: .3; }
+      button:active { transform: scale(.98); }
+      button:disabled { opacity: .3; box-shadow: none; }
 
-      .top { display: flex; justify-content: space-between; align-items: center; font-size: 15px; }
-      .chip { background: var(--card); padding: 8px 12px; border-radius: 12px; }
-      .aura { color: var(--magenta); font-weight: 800; font-variant-numeric: tabular-nums; }
+      .top { display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
+      .chip { background: var(--surface); border: 1px solid var(--border); padding: 7px 14px; border-radius: 999px; color: var(--text-dim); }
+      .aura { color: var(--magenta); font-weight: 700; font-variant-numeric: tabular-nums; }
 
-      .question { font-size: 26px; font-weight: 800; line-height: 1.2; text-align: center; }
-      .clock { font-size: 56px; font-weight: 800; text-align: center; font-variant-numeric: tabular-nums; }
-      .clock.paused { color: var(--magenta); font-size: 30px; }
-      .chartbox { height: 120px; border-radius: 14px; background: rgba(255,255,255,.03); }
-      canvas { width: 100%; height: 100%; display: block; }
+      .question { font-family: 'Anton', sans-serif; font-size: 30px; letter-spacing: .02em; line-height: 1.15; text-align: center; }
+      .clock { font-family: 'Anton', sans-serif; font-size: 64px; text-align: center; font-variant-numeric: tabular-nums; }
+      .clock.paused { color: var(--magenta); font-size: 34px; }
 
       .sides { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
       .side {
-        padding: 22px 12px; border-radius: 18px; background: var(--card); border: 3px solid transparent;
-        text-align: center; cursor: pointer;
+        padding: 22px 12px; border-radius: 18px; background: transparent; border: 2px solid var(--border);
+        text-align: center; cursor: pointer; transition: all .15s ease;
       }
-      .side .name { font-size: 26px; font-weight: 800; }
-      .side .mult { font-size: 15px; opacity: .75; margin-top: 4px; font-variant-numeric: tabular-nums; }
+      .side .name { font-family: 'Anton', sans-serif; font-size: 30px; letter-spacing: .06em; }
+      .side .mult { font-size: 14px; color: var(--text-dim); margin-top: 4px; font-variant-numeric: tabular-nums; }
       .side.up .name { color: var(--up); }
       .side.down .name { color: var(--down); }
-      .side.up.sel { border-color: var(--up); background: rgba(59,245,155,.14); }
-      .side.down.sel { border-color: var(--down); background: rgba(255,92,122,.14); }
-      .side.locked { opacity: .35; }
+      .side.up.sel { border-color: var(--up); background: rgba(53,226,140,.12); box-shadow: 0 0 30px rgba(53,226,140,.35); }
+      .side.down.sel { border-color: var(--down); background: rgba(255,77,106,.12); box-shadow: 0 0 30px rgba(255,77,106,.35); }
+      .side.locked { opacity: .3; }
 
-      .stakes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-      .stakes button { padding: 16px 4px; font-size: 16px; background: #1a1a26; color: #e9e9f2; }
-      .stakes button.go { background: var(--magenta); color: #07070d; }
+      /* stake buttons styled as the casino chips from chip-mise.js */
+      .stakes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; justify-items: center; }
+      .stakes button {
+        width: 64px; height: 64px; padding: 0; border-radius: 50%; font-size: 15px; font-weight: 700;
+        color: #170013; border: 4px dashed rgba(255,255,255,.55); box-shadow: 0 4px 0 rgba(0,0,0,.35);
+      }
+      .stakes button:nth-child(1) { background: #FF8FD4; }
+      .stakes button:nth-child(2) { background: #B34DFF; color: #fff; }
+      .stakes button:nth-child(3) { background: #FF2E9E; }
+      .stakes button:nth-child(4), .stakes button.go { background: var(--gold); }
 
-      .status { text-align: center; font-size: 15px; min-height: 22px; opacity: .85; }
-      .tick { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; background: #555; }
-      .tick.seen { background: #b0b0c0; }
+      .status { text-align: center; font-size: 15px; min-height: 22px; color: var(--text-dim); }
+      .tick { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; background: var(--text-faint); }
+      .tick.seen { background: var(--magenta-soft); }
       .tick.final { background: var(--up); }
 
-      /* the magenta action screen */
-      #magenta { background: #FF00E5; justify-content: center; align-items: center; gap: 28px; }
-      #magenta .hint { color: #2a0024; font-size: 21px; font-weight: 800; text-align: center; line-height: 1.4; }
-      #magenta .count { color: #2a0024; font-size: 74px; font-weight: 800; }
+      /* the magenta action screen — pure #FF00E5 kept on purpose: it is what the camera detects */
+      #magenta { background: #FF00E5; justify-content: center; align-items: center; gap: 28px; max-width: none; }
+      #magenta .hint { color: #2a0024; font-family: 'Anton', sans-serif; font-size: 30px; letter-spacing: .04em; text-align: center; line-height: 1.3; }
+      #magenta .count { color: #2a0024; font-family: 'Anton', sans-serif; font-size: 96px; }
 
       .result { text-align: center; }
-      .result .big { font-size: 60px; font-weight: 800; }
-      .result .sub { font-size: 17px; opacity: .8; margin-top: 8px; }
-      .board .row { display: flex; justify-content: space-between; padding: 7px 0; font-size: 17px; }
-      .key { word-break: break-all; font-size: 12px; background: #10101a; padding: 12px; border-radius: 10px; opacity: .85; }
-      .warn { font-size: 13px; opacity: .65; line-height: 1.5; text-align: center; }
+      .result .big { font-family: 'Anton', sans-serif; font-size: 76px; letter-spacing: .03em; }
+      .result .sub { font-size: 16px; color: var(--text-dim); margin-top: 8px; }
+      .board { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 10px 16px; }
+      .board .row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 16px; border-bottom: 1px solid var(--border); }
+      .board .row:last-child { border-bottom: none; }
+      .key { word-break: break-all; font-size: 12px; background: var(--surface); border: 1px solid var(--border); padding: 12px; border-radius: 12px; color: var(--text-dim); font-family: ui-monospace, monospace; }
+      .warn { font-size: 13px; color: var(--text-faint); line-height: 1.5; text-align: center; }
       .spacer { flex: 1; }
     </style>
   </head>
@@ -106,10 +122,9 @@
       </div>
       <div class="question" id="q">en attente de la manche…</div>
       <div class="clock" id="clock">—</div>
-      <div class="chartbox" id="chartbox"><canvas id="chart"></canvas></div>
       <div class="sides">
-        <div class="side up" id="sideUp"><div class="name" id="upName">UP</div><div class="mult" id="upMult">caché</div></div>
-        <div class="side down" id="sideDown"><div class="name" id="downName">DOWN</div><div class="mult" id="downMult">caché</div></div>
+        <div class="side up" id="sideUp"><div class="name" id="upName">OVER</div><div class="mult" id="upMult">caché</div></div>
+        <div class="side down" id="sideDown"><div class="name" id="downName">UNDER</div><div class="mult" id="downMult">caché</div></div>
       </div>
       <div class="stakes">
         <button data-stake="100">100</button>

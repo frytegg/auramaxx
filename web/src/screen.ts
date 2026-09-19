@@ -2,11 +2,14 @@
  * Projector screen. Reads from the server over one WebSocket; never touches an RPC, so the
  * number of players does not change how much traffic this page makes.
  */
-import { PriceChart, fmt, type Point } from './chart.js'
 
 const $ = (id: string): HTMLElement => document.getElementById(id)!
 
-const chart = new PriceChart($('chart') as HTMLCanvasElement)
+const QUESTION = 'COMBIEN VONT S’ALLUMER ?'
+
+function setManche(n: number): void {
+  $('manche').textContent = n > 0 ? `MANCHE ${n}/2` : 'MANCHE —/2'
+}
 let seq = -1
 let leaderboardHtml = ''
 
@@ -38,24 +41,18 @@ function connect(): void {
 function handle(msg: Record<string, unknown>, socket: WebSocket): void {
   switch (msg.type) {
     case 'snapshot': {
-      const history = (msg.priceHistory ?? []) as Point[]
-      chart.seed(history)
+      setManche(Number(msg.manche ?? 0))
       const round = msg.round as Record<string, unknown> | null
       if (round) applyRound(round)
       $('players').textContent = String(msg.players ?? 0)
       renderLeaderboard(msg.leaderboard as Array<Record<string, unknown>>)
       break
     }
-    case 'price': {
-      chart.push({ t: Number(msg.t), p: Number(msg.p) })
-      if (msg.openPrice !== null && msg.openPrice !== undefined) chart.setOpenPrice(Number(msg.openPrice))
-      break
-    }
     case 'open': {
-      chart.setOpenPrice(msg.openPrice === null ? null : Number(msg.openPrice))
-      chart.setWindow(Number(msg.durationMs ?? 30_000) + 15_000)
-      $('question').textContent =
-        Number(msg.kind) === 0 ? 'BITCOIN — UP or DOWN?' : 'HOW MANY OF YOU WILL LIGHT UP?'
+      setManche(Number(msg.manche ?? 0))
+      $('question').textContent = QUESTION
+      $('liveCount').textContent = '—'
+      $('liveThreshold').textContent = '?'
       $('phase').textContent = 'open'
       setHidden(true)
       setJoinVisible(false)
@@ -68,8 +65,12 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       $('clock').classList.toggle('paused', msg.phase === 'reveal')
       $('phase').textContent = String(msg.phase ?? '')
       if (msg.hidden === false) showPools(msg)
+      if (msg.count !== undefined) $('liveCount').textContent = String(msg.count)
       break
     }
+    case 'threshold':
+      $('liveThreshold').textContent = String(msg.threshold ?? '?')
+      break
     case 'reveal': {
       setHidden(false)
       showPools(msg)
@@ -86,15 +87,11 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       break
     }
     case 'resolved': {
-      const winner = Number(msg.winner) === 0 ? 'UP' : 'DOWN'
+      const winner = Number(msg.winner) === 0 ? 'OVER' : 'UNDER'
       $('flashBig').textContent = winner
-      $('flashBig').style.color = winner === 'UP' ? 'var(--up)' : 'var(--down)'
-      const open = msg.openPrice === null ? null : Number(msg.openPrice)
-      const close = msg.closePrice === null ? null : Number(msg.closePrice)
-      $('flashSub').textContent =
-        open !== null && close !== null
-          ? `${fmt(open)} → ${fmt(close)} · ${String(msg.paid ?? 0)} paid in 1 transaction`
-          : `count ${String(msg.count ?? 0)} vs threshold ${String(msg.threshold ?? 0)} · ${String(msg.paid ?? 0)} paid`
+      $('flashBig').style.color = winner === 'OVER' ? 'var(--up)' : 'var(--down)'
+      $('liveCount').textContent = String(msg.count ?? 0)
+      $('flashSub').textContent = `${String(msg.count ?? 0)} écrans vs seuil ${String(msg.threshold ?? 0)} · ${String(msg.paid ?? 0)} payés en 1 transaction`
       // never render a hash or a settle time that did not happen
       $('flashHash').textContent = msg.txHash ? `${String(msg.txHash)} · ${String(msg.settleMs ?? '?')} ms` : ''
       $('flash').classList.add('on')
@@ -129,8 +126,9 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
 }
 
 function applyRound(round: Record<string, unknown>): void {
-  $('question').textContent =
-    Number(round.kind) === 0 ? 'BITCOIN — UP or DOWN?' : 'HOW MANY OF YOU WILL LIGHT UP?'
+  $('question').textContent = QUESTION
+  if (round.threshold !== null && round.threshold !== undefined) $('liveThreshold').textContent = String(round.threshold)
+  if (round.count !== undefined) $('liveCount').textContent = String(round.count)
   $('phase').textContent = String(round.phase ?? '')
   setHidden(round.hidden !== false)
   if (round.hidden === false) showPools(round)
@@ -181,12 +179,8 @@ function hideFlash(): void {
   $('flash').classList.remove('on')
 }
 
-function loop(): void {
-  chart.draw()
-  requestAnimationFrame(loop)
-}
 
-// the join QR covers the chart until a round opens, then gets out of the way
+// the join QR covers the live count until a round opens, then gets out of the way
 const qr = $('qr') as HTMLImageElement
 qr.src = `/api/qr.svg?url=${encodeURIComponent(location.origin + '/')}`
 
@@ -202,4 +196,5 @@ void fetch('/api/config')
   .catch(() => undefined)
 
 connect()
-requestAnimationFrame(loop)
+
+export {}

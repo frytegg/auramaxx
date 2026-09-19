@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AURAMAXX — Régie</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;600;700&display=swap" />
+    <style>
+      /* design: frontend/operateur/index.html — wired to the server's /op/* routes */
+      :root {
+        color-scheme: dark;
+        --bg: #0B0710; --surface: #14101A; --border: #2C1E34; --magenta: #FF2E9E; --green: #35E28C;
+        --red: #FF4D6A; --text: #F8F3F7; --text-dim: #AE9AB2; --text-faint: #7A6A7E;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { background: var(--bg); color: var(--text); font-family: 'Space Grotesk', system-ui, sans-serif; min-height: 100vh; }
+      .wrap { max-width: 1280px; margin: 0 auto; padding: 28px 32px; display: flex; flex-direction: column; gap: 24px; }
+      header { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+      .title { font-family: 'Anton', sans-serif; font-size: 28px; letter-spacing: 2px; color: var(--magenta); }
+      .pill {
+        display: inline-flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border);
+        border-radius: 999px; padding: 8px 16px; font-size: 14px; color: var(--text-dim);
+      }
+      .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); }
+      .dot.on { background: var(--green); }
+      .grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 24px; }
+      @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+      .card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 26px; display: flex; flex-direction: column; gap: 16px; }
+      .label { font-size: 13px; letter-spacing: 2px; color: var(--text-dim); text-transform: uppercase; }
+      .time { font-family: 'Anton', sans-serif; font-size: 64px; font-variant-numeric: tabular-nums; }
+      .phase { font-family: 'Anton', sans-serif; font-size: 22px; letter-spacing: .08em; color: var(--magenta); }
+      .row { display: flex; gap: 10px; flex-wrap: wrap; }
+      .btn {
+        flex: 1; min-width: 150px; text-align: left; padding: 16px 18px; border-radius: 14px; border: 2px solid var(--border);
+        font: 600 15px 'Space Grotesk', sans-serif; cursor: pointer; background: transparent; color: var(--text); transition: all .15s ease;
+      }
+      .btn:hover:not(:disabled) { border-color: var(--magenta); }
+      .btn.next { background: var(--magenta); color: #170013; border-color: var(--magenta); box-shadow: 0 0 20px rgba(255,46,158,.4); }
+      .btn:disabled { opacity: .35; cursor: default; }
+      .pools { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      .pool { border: 2px solid var(--border); border-radius: 14px; padding: 14px; }
+      .pool .n { font-family: 'Anton', sans-serif; font-size: 30px; font-variant-numeric: tabular-nums; }
+      .pool.up .n { color: var(--green); } .pool.down .n { color: var(--red); }
+      .pool .s { font-size: 13px; color: var(--text-dim); }
+      input {
+        background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 12px; padding: 12px 14px;
+        font: 600 16px 'Space Grotesk', sans-serif; width: 100%;
+      }
+      .log { font-size: 13px; color: var(--text-dim); font-family: ui-monospace, monospace; max-height: 180px; overflow: auto; line-height: 1.6; }
+      .log .err { color: var(--red); }
+      .board div { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 15px; }
+      .links a { color: var(--magenta); font-size: 14px; margin-right: 14px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <span class="title">AURAMAXX — Régie</span>
+        <span class="pill"><span class="dot" id="conn"></span><span id="players">0 joueur connecté</span></span>
+      </header>
+
+      <div class="grid">
+        <section class="card">
+          <span class="label" id="mancheLabel">Manche —/2</span>
+          <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px">
+            <span class="time" id="time">—:—</span>
+            <span class="phase" id="phase">EN ATTENTE</span>
+          </div>
+          <div class="pools">
+            <div class="pool up"><div class="s">OVER</div><div class="n" id="poolUp">caché</div></div>
+            <div class="pool down"><div class="s">UNDER</div><div class="n" id="poolDown">caché</div></div>
+          </div>
+          <span class="label">Lancer</span>
+          <div class="row">
+            <button class="btn" data-op="open" id="openBtn">1 · Lancer la manche 1 (45s)</button>
+          </div>
+          <span class="label">Pendant le round</span>
+          <div class="row">
+            <button class="btn" data-op="resume">2 · Reprendre après un reveal</button>
+            <button class="btn" data-op="freeze">3 · Freeze maintenant</button>
+          </div>
+          <span class="label">Après le round</span>
+          <div class="row">
+            <button class="btn" data-op="settle">4 · Résoudre &amp; payer les AURA</button>
+            <button class="btn" data-op="payout">5 · Payer tout le monde en MON</button>
+          </div>
+        </section>
+
+        <section class="card">
+          <span class="label">Clé régie</span>
+          <input id="key" type="password" placeholder="OP_KEY" autocomplete="off" />
+          <span class="label">Compte caméra (round magenta)</span>
+          <div class="row">
+            <input id="count" type="number" min="0" value="0" style="flex:1" />
+            <button class="btn" id="setCount" style="flex:0 0 auto; min-width:0">Envoyer</button>
+          </div>
+          <span style="font-size:12px; color:var(--text-faint)">Normalement envoyé par la page caméra ; utile en démo sans caméra.</span>
+          <span class="label">Classement</span>
+          <div class="board" id="board"></div>
+          <span class="label">Journal</span>
+          <div class="log" id="log"></div>
+          <div class="links"><a href="/" target="_blank">Téléphone ↗</a><a href="/screen.html" target="_blank">Projecteur ↗</a><a href="/calibrate.html" target="_blank">Caméra ↗</a></div>
+        </section>
+      </div>
+    </div>
+    <script type="module" src="/src/regie.ts"></script>
+  </body>
+</html>

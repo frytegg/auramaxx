@@ -8,7 +8,6 @@
  */
 import { encodePacked, keccak256, type Address, type Hex } from 'viem'
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
-import { PriceChart, type Point } from './chart.js'
 
 const $ = (id: string): HTMLElement => document.getElementById(id)!
 const AVATARS = ['🦊', '🐸', '👽', '🤖', '🐙', '🦈', '🔥', '💎', '🍄', '👾', '🦍', '🌀']
@@ -49,8 +48,13 @@ let nonce = Number(localStorage.getItem('auramaxx.nonce') ?? '0')
 let avatar = Number(localStorage.getItem('auramaxx.avatar') ?? '0')
 let seq = -1
 let wakeLock: WakeLockSentinel | null = null
+let manche = 0
+const QUESTION = 'COMBIEN VONT S’ALLUMER ?'
 
-const chart = new PriceChart($('chart') as HTMLCanvasElement)
+function setQuestion(): void {
+  $('q').textContent = manche > 0 ? `MANCHE ${manche}/2 · ${QUESTION}` : QUESTION
+}
+
 
 // --- join screen -------------------------------------------------------------------------
 
@@ -136,7 +140,7 @@ function selectSide(side: 0 | 1): void {
 
 function updateStatus(): void {
   const sideName = (s: 0 | 1 | null): string =>
-    s === null ? '' : round?.kind === 1 ? (s === 0 ? 'OVER' : 'UNDER') : s === 0 ? 'UP' : 'DOWN'
+    s === null ? '' : s === 0 ? 'OVER' : 'UNDER'
   if (myStake > 0) {
     $('statusText').textContent = `${sideName(mySide)} · ${myStake} AURA misés · reste ${1000 - myStake}`
   } else if (selectedSide !== null) {
@@ -217,7 +221,7 @@ document.addEventListener('visibilitychange', () => {
 function handle(msg: Record<string, unknown>): void {
   switch (msg.type) {
     case 'snapshot': {
-      chart.seed((msg.priceHistory ?? []) as Point[])
+      manche = Number(msg.manche ?? manche)
       const you = msg.you as Record<string, unknown> | null
       if (you) {
         aura = Number(you.budget ?? 1000) - Number(you.staked ?? 0)
@@ -243,31 +247,26 @@ function handle(msg: Record<string, unknown>): void {
       myStake = 0
       mySide = null
       selectedSide = null
+      $('sideUp').classList.remove('sel')
+      $('sideDown').classList.remove('sel')
       aura = 1000
       $('meAura').textContent = '1000'
-      chart.setOpenPrice(msg.openPrice === null ? null : Number(msg.openPrice))
-      chart.setWindow(round.durationMs + 15_000)
-      $('chartbox').style.display = round.kind === 0 ? 'block' : 'none'
-      $('q').textContent = round.kind === 0 ? 'BITCOIN : UP ou DOWN ?' : 'COMBIEN VONT S’ALLUMER ?'
-      $('upName').textContent = round.kind === 0 ? 'UP' : 'OVER'
-      $('downName').textContent = round.kind === 0 ? 'DOWN' : 'UNDER'
+      manche = Number(msg.manche ?? manche + 1)
+      setQuestion()
       setHidden(true)
       setTick('idle')
-      show('vGame')
+      // a phone still on the join screen stays there: the round must not skip onboarding
+      if (!$('vJoin').classList.contains('on')) show('vGame')
       updateStatus()
       break
     }
-    case 'price':
-      chart.push({ t: Number(msg.t), p: Number(msg.p) })
-      if (msg.openPrice !== null && msg.openPrice !== undefined) chart.setOpenPrice(Number(msg.openPrice))
-      break
     case 'tick': {
       if (round) round.phase = String(msg.phase ?? round.phase)
       const remaining = Number(msg.remainingMs ?? 0)
       $('clock').textContent = `${(remaining / 1000).toFixed(1)}s`
       $('clock').classList.toggle('paused', msg.phase === 'reveal')
       if (msg.hidden === false) showMults(msg)
-      if (round?.kind === 1 && msg.count !== undefined) $('magentaCount').textContent = String(msg.count)
+      if (msg.count !== undefined) $('magentaCount').textContent = String(msg.count)
       updateStatus()
       break
     }
@@ -285,7 +284,7 @@ function handle(msg: Record<string, unknown>): void {
       showMults(msg)
       setTick('final')
       // round 2: the bet is locked, now the room becomes the oracle
-      if (round?.kind === 1) void enterMagenta()
+      void enterMagenta()
       break
     }
     case 'bet_ok': {
@@ -317,11 +316,8 @@ function handle(msg: Record<string, unknown>): void {
       const you = msg.you as Record<string, unknown> | undefined
       $('resultBig').textContent = myStake === 0 ? '—' : won ? 'GAGNÉ' : 'PERDU'
       $('resultBig').style.color = myStake === 0 ? '#888' : won ? 'var(--up)' : 'var(--down)'
-      const label = round?.kind === 1 ? (winner === 0 ? 'OVER' : 'UNDER') : winner === 0 ? 'UP' : 'DOWN'
-      $('resultSub').textContent =
-        round?.kind === 1
-          ? `${label} · ${String(msg.count ?? 0)} écrans comptés, seuil ${String(msg.threshold ?? 0)}`
-          : `${label} · ${String(msg.paid ?? 0)} payés en une seule transaction`
+      const label = winner === 0 ? 'OVER' : 'UNDER'
+      $('resultSub').textContent = `${label} · ${String(msg.count ?? 0)} écrans comptés, seuil ${String(msg.threshold ?? 0)} · manche ${manche}/2`
       renderBoard(msg.leaderboard as Array<Record<string, unknown>>, Number(you?.profit ?? 0))
       show('vResult')
       break
@@ -349,8 +345,7 @@ function applyRound(data: Record<string, unknown> | null): void {
     hidden: data.hidden !== false,
     durationMs: 30000,
   }
-  $('q').textContent = round.kind === 0 ? 'BITCOIN : UP ou DOWN ?' : 'COMBIEN VONT S’ALLUMER ?'
-  $('chartbox').style.display = round.kind === 0 ? 'block' : 'none'
+  setQuestion()
   setHidden(round.hidden)
 }
 
@@ -390,10 +385,6 @@ $('copyKey').addEventListener('click', () => {
   $('copyKey').textContent = 'COPIÉE'
 })
 
-function loop(): void {
-  if (round?.kind === 0) chart.draw()
-  requestAnimationFrame(loop)
-}
 
 void fetch('/api/config')
   .then((r) => r.json())
@@ -403,4 +394,3 @@ void fetch('/api/config')
   .catch(() => undefined)
 
 connect()
-requestAnimationFrame(loop)

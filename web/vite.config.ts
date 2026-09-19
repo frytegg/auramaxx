@@ -8,6 +8,7 @@ export default defineConfig({
         main: resolve(__dirname, 'index.html'),
         calibrate: resolve(__dirname, 'calibrate.html'),
         screen: resolve(__dirname, 'screen.html'),
+        regie: resolve(__dirname, 'regie.html'),
       },
     },
   },

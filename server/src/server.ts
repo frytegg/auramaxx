@@ -8,7 +8,7 @@ import QRCode from 'qrcode'
 import { env } from './env.js'
 import { log } from './log.js'
 import { contract } from './chain.js'
-import { startPricePolling, currentPrice } from './price.js'
+import { currentPrice } from './price.js'
 import {
   bet,
   cameraUpdate,
@@ -19,6 +19,7 @@ import {
   openRound,
   payout,
   resume,
+  setCount,
   settle,
   snapshot,
   startLoop,
@@ -57,7 +58,10 @@ onBroadcast(broadcast)
 
 function sendTo(socket: Socket, event: unknown): void {
   try {
-    socket.send(JSON.stringify({ ...(event as object), seq: ++seq }))
+    // a direct reply carries the current broadcast seq WITHOUT consuming one: seq tracks the
+    // broadcast stream only, otherwise every private message looks like a gap to every other
+    // client, they all resync, and each resync reply triggers the next storm
+    socket.send(JSON.stringify({ ...(event as object), seq }))
   } catch {
     /* the socket will be cleaned up on close */
   }
@@ -162,8 +166,8 @@ function guard(request: { query: unknown }): boolean {
 
 app.post('/op/open', async (request, reply) => {
   if (!guard(request)) return reply.code(403).send({ error: 'nope' })
-  const kind = (request.query as { kind?: string }).kind === '1' ? 1 : 0
-  await openRound(kind)
+  // the game is two magenta rounds: the BTC question was dropped, so every round is kind 1
+  await openRound(1)
   return { ok: true }
 })
 
@@ -185,6 +189,14 @@ app.post('/op/settle', async (request, reply) => {
   return { ok: true }
 })
 
+/** Manual camera count, for the régie when no camera page is running (demo, or a dead camera). */
+app.post('/op/count', async (request, reply) => {
+  if (!guard(request)) return reply.code(403).send({ error: 'nope' })
+  const n = Math.max(0, Math.floor(Number((request.query as { n?: string }).n ?? 0)))
+  setCount(n)
+  return { ok: true, count: n }
+})
+
 app.post('/op/payout', async (request, reply) => {
   if (!guard(request)) return reply.code(403).send({ error: 'nope' })
   const result = await payout()
@@ -204,7 +216,6 @@ app.setNotFoundHandler((request, reply) => {
   return reply.sendFile('index.html')
 })
 
-startPricePolling()
 startLoop()
 
 await app.listen({ port: env.PORT, host: '0.0.0.0' })

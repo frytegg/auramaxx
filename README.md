@@ -79,6 +79,25 @@ two minutes**. A 30-second round therefore has roughly a one-in-three chance of 
 price moving at all. So round 1 uses our own backend as the oracle, and we say so on stage. That
 is the first half of the oracle story; the room is the second half.
 
+## Local preview (demo mode, no keys needed)
+
+`--demo` swaps the chain for an in-memory copy of the contract (same maths as `Auramaxx.sol`),
+so the whole flow runs on a laptop with no relayer key, no contract and no MON.
+
+```
+cd server && pnpm install && pnpm demo      # :8080, OP_KEY = demo123
+cd web && pnpm install && pnpm dev          # :5173
+```
+
+- phone: http://localhost:5173/
+- régie: http://localhost:5173/regie.html?k=demo123
+- projector: http://localhost:5173/screen.html
+
+Reveals pause the round: press « Reprendre » in the régie to continue.
+
+On this branch the BTC question is gone: a game is **two magenta rounds** (manche 1/2 and 2/2),
+opened from the régie. The projector shows the live camera count against the contract's threshold.
+
 ## Licence
 
 MIT
