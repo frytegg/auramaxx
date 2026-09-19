@@ -107,11 +107,11 @@
     <section class="view on" id="vJoin">
       <div class="spacer"></div>
       <div class="brand">AURAMAXX</div>
-      <div class="tagline">Choisis ton avatar, ton prénom,<br />et tu as 1000 AURA gratuits.</div>
+      <div class="tagline">Pick an avatar and a name.<br />You get 1000 AURA, free.</div>
       <div class="avatars" id="avatars"></div>
-      <input id="name" placeholder="ton prénom" maxlength="12" autocomplete="off" />
-      <button id="go">ENTRER</button>
-      <div class="warn">Aucune installation, aucun portefeuille à créer. L'AURA n'a aucune valeur.</div>
+      <input id="name" placeholder="Your name" maxlength="12" autocomplete="off" />
+      <button id="go">ENTER</button>
+      <div class="warn">Nothing to install, no wallet to create. AURA has no value.</div>
       <div class="spacer"></div>
     </section>
 
@@ -121,29 +121,29 @@
         <div class="chip"><span id="meAvatar">🦊</span> <span id="meName">—</span></div>
         <div class="chip"><span class="aura" id="meAura">1000</span> AURA</div>
       </div>
-      <div class="question" id="q">en attente de la manche…</div>
+      <div class="question" id="q">Waiting for the round…</div>
       <div class="clock" id="clock">—</div>
       <div class="sides">
-        <div class="side up" id="sideUp"><div class="name" id="upName">OVER</div><div class="mult" id="upMult">caché</div><div class="mine" id="upMine"></div></div>
-        <div class="side down" id="sideDown"><div class="name" id="downName">UNDER</div><div class="mult" id="downMult">caché</div><div class="mine" id="downMine"></div></div>
+        <div class="side up" id="sideUp"><div class="name" id="upName">OVER</div><div class="mult" id="upMult">—</div><div class="mine" id="upMine"></div></div>
+        <div class="side down" id="sideDown"><div class="name" id="downName">UNDER</div><div class="mult" id="downMult">—</div><div class="mine" id="downMine"></div></div>
       </div>
       <div class="stakes">
         <button data-stake="100">100</button>
         <button data-stake="250">250</button>
         <button data-stake="500">500</button>
-        <button data-stake="all" class="go">TOUT</button>
+        <button data-stake="all" class="go">ALL IN</button>
       </div>
-      <div class="status" id="status"><span class="tick" id="tick"></span><span id="statusText">choisis un camp</span></div>
+      <div class="status" id="status"><span class="tick" id="tick"></span><span id="statusText">Pick a side</span></div>
       <div class="spacer"></div>
     </section>
 
     <!-- magenta action -->
     <section class="view" id="magenta">
       <div class="hint" id="magentaClock" style="font-size:44px">45s</div>
-      <div class="hint" id="magentaHint">MONTRE TON ÉCRAN<br />À LA CAMÉRA</div>
+      <div class="hint" id="magentaHint">SHOW YOUR SCREEN<br />TO THE CAMERA</div>
       <div class="count" id="magentaCount">—</div>
-      <div class="hint" id="magentaLine" style="font-size:20px">seuil —</div>
-      <div class="hint" style="font-size:15px">luminosité à fond</div>
+      <div class="hint" id="magentaLine" style="font-size:20px">Threshold —</div>
+      <div class="hint" style="font-size:15px">Brightness all the way up</div>
     </section>
 
     <!-- result -->
@@ -155,9 +155,9 @@
       </div>
       <div class="board" id="resultBoard"></div>
       <div id="walletBox" style="display:none">
-        <div class="warn">Ton portefeuille et ses MON t'appartiennent. Clé privée (testnet, sans valeur réelle) :</div>
+        <div class="warn">This wallet and its MON are yours. Private key (testnet, no real value):</div>
         <div class="key" id="walletKey"></div>
-        <button id="copyKey" style="margin-top:10px">COPIER LA CLÉ</button>
+        <button id="copyKey" style="margin-top:10px">COPY THE KEY</button>
       </div>
       <div class="spacer"></div>
     </section>

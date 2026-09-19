@@ -53,10 +53,10 @@ let avatar = Number(localStorage.getItem('auramaxx.avatar') ?? '0')
 let seq = -1
 let wakeLock: WakeLockSentinel | null = null
 let manche = 0
-const QUESTION = 'COMBIEN VONT S’ALLUMER ?'
+const QUESTION = 'HOW MANY WILL LIGHT UP?'
 
 function setQuestion(): void {
-  $('q').textContent = manche > 0 ? `MANCHE ${manche}/2 · ${QUESTION}` : QUESTION
+  $('q').textContent = manche > 0 ? `ROUND ${manche}/2 · ${QUESTION}` : QUESTION
 }
 
 
@@ -147,19 +147,19 @@ function updateStatus(): void {
   const left = 1000 - myStake
 
   if (myUp > 0 && myDown > 0) {
-    $('statusText').textContent = `OVER ${myUp} · UNDER ${myDown} · reste ${left}`
+    $('statusText').textContent = `OVER ${myUp} · UNDER ${myDown} · ${left} left`
   } else if (myStake > 0) {
-    $('statusText').textContent = `${sideName(myUp > 0 ? 0 : 1)} · ${myStake} AURA misés · reste ${left}`
+    $('statusText').textContent = `${sideName(myUp > 0 ? 0 : 1)} · ${myStake} AURA in · ${left} left`
   } else if (selectedSide !== null) {
-    $('statusText').textContent = `${sideName(selectedSide)} — choisis ta mise`
+    $('statusText').textContent = `${sideName(selectedSide)} — pick your stake`
   } else {
     $('statusText').textContent =
-      round?.phase === 'reveal' ? 'REVEAL — 5 s pour miser' : round?.phase === 'open' ? 'choisis un camp' : 'paris fermés'
+      round?.phase === 'reveal' ? 'REVEAL — 5 s to bet' : round?.phase === 'open' ? 'Pick a side' : 'Betting closed'
   }
 
   // each side shows what YOU have on it, so a split bet is readable at a glance
-  $('upMine').textContent = myUp > 0 ? `tu as ${myUp}` : ''
-  $('downMine').textContent = myDown > 0 ? `tu as ${myDown}` : ''
+  $('upMine').textContent = myUp > 0 ? `you: ${myUp}` : ''
+  $('downMine').textContent = myDown > 0 ? `you: ${myDown}` : ''
   $('sideUp').classList.toggle('mine', myUp > 0)
   $('sideDown').classList.toggle('mine', myDown > 0)
 
@@ -181,7 +181,7 @@ async function enterMagenta(): Promise<void> {
   try {
     wakeLock = await navigator.wakeLock?.request('screen')
   } catch {
-    /* the screen may still dim; we say "luminosité à fond" out loud too */
+    /* the screen may still dim; we say "brightness all the way up" out loud too */
   }
   setTimeout(() => {
     $('magentaHint').style.opacity = '0.25'
@@ -216,7 +216,7 @@ function applyPhase(phase: string): void {
     if (previous === 'live' || previous === 'reveal') {
       leaveMagenta()
       show('vGame')
-      $('statusText').textContent = 'fin du chrono — calcul du résultat…'
+      $('statusText').textContent = 'Time is up — settling…'
     }
   }
 }
@@ -349,10 +349,10 @@ function handle(msg: Record<string, unknown>): void {
     }
     case 'error': {
       const codes: Record<string, string> = {
-        CLOSED: 'trop tard, les paris sont fermés',
-        BROKE: 'tu as déjà tout misé',
-        BAD_SIG: 'signature refusée',
-        NOT_JOINED: 'reconnecte-toi',
+        CLOSED: 'Too late, betting is closed',
+        BROKE: 'You have already staked everything',
+        BAD_SIG: 'Signature refused',
+        NOT_JOINED: 'Reconnect to rejoin',
       }
       $('statusText').textContent = codes[String(msg.code)] ?? String(msg.code)
       setTick('idle')
@@ -367,20 +367,20 @@ function handle(msg: Record<string, unknown>): void {
       const won = onWinner > 0
       const you = msg.you as Record<string, unknown> | undefined
       // a hedged player has won something and lost something: say so rather than pick a side
-      const verdict = myStake === 0 ? '—' : !won ? 'PERDU' : onLoser > 0 ? 'PARTAGÉ' : 'GAGNÉ'
+      const verdict = myStake === 0 ? '—' : !won ? 'LOST' : onLoser > 0 ? 'SPLIT' : 'WON'
       $('resultBig').textContent = verdict
       $('resultBig').style.color =
-        myStake === 0 ? '#888' : verdict === 'GAGNÉ' ? 'var(--up)' : verdict === 'PARTAGÉ' ? 'var(--gold)' : 'var(--down)'
+        myStake === 0 ? '#888' : verdict === 'WON' ? 'var(--up)' : verdict === 'SPLIT' ? 'var(--gold)' : 'var(--down)'
       const label = winner === 0 ? 'OVER' : 'UNDER'
-      $('resultSub').textContent = `${label} · ${String(msg.count ?? 0)} écrans comptés, seuil ${String(msg.threshold ?? 0)} · manche ${manche}/2`
+      $('resultSub').textContent = `${label} · ${String(msg.count ?? 0)} screens counted, threshold ${String(msg.threshold ?? 0)} · round ${manche}/2`
       renderBoard(msg.leaderboard as Array<Record<string, unknown>>, Number(you?.profit ?? 0))
       show('vResult')
       break
     }
     case 'payout': {
-      $('resultBig').textContent = 'PAYÉ'
+      $('resultBig').textContent = 'PAID'
       $('resultBig').style.color = 'var(--magenta)'
-      $('resultSub').textContent = `${String(msg.winners ?? 0)} gagnants · ${Number(msg.totalMon ?? 0).toFixed(2)} MON envoyés`
+      $('resultSub').textContent = `${String(msg.winners ?? 0)} winners · ${Number(msg.totalMon ?? 0).toFixed(2)} MON sent`
       $('walletBox').style.display = 'block'
       $('walletKey').textContent = privateKey
       show('vResult')
@@ -404,11 +404,16 @@ function applyRound(data: Record<string, unknown> | null): void {
   setHidden(round.hidden)
 }
 
+/**
+ * Odds are withheld while betting is open, on purpose: seeing the pools would turn a room of
+ * beginners into a queue behind whoever bet first, and the reveal is the moment that pays for it.
+ * Before a round exists there is nothing to withhold, so say so rather than claiming a secret.
+ */
 function setHidden(hidden: boolean): void {
-  if (hidden) {
-    $('upMult').textContent = 'caché'
-    $('downMult').textContent = 'caché'
-  }
+  if (!hidden) return
+  const label = round ? 'Hidden' : '—'
+  $('upMult').textContent = label
+  $('downMult').textContent = label
 }
 
 function showMults(msg: Record<string, unknown>): void {
@@ -420,7 +425,7 @@ function showMults(msg: Record<string, unknown>): void {
 
 function fmtMult(x100: number): string {
   if (!x100) return '—'
-  return x100 > 9999 ? '>99× ta mise' : `${(x100 / 100).toFixed(2)}× ta mise`
+  return x100 > 9999 ? '>99× your stake' : `${(x100 / 100).toFixed(2)}× your stake`
 }
 
 function renderBoard(rows: Array<Record<string, unknown>> | undefined, myProfit: number): void {
@@ -432,12 +437,12 @@ function renderBoard(rows: Array<Record<string, unknown>> | undefined, myProfit:
       return `<div class="row"><span>${i + 1}. ${AVATARS[Number(row.avatar ?? 0)] ?? ''} ${name}</span><span class="aura">${String(row.profit ?? 0)}</span></div>`
     })
     .join('')
-  $('resultBoard').innerHTML = `${html}<div class="row" style="margin-top:8px;opacity:.8"><span>toi</span><span class="aura">${myProfit}</span></div>`
+  $('resultBoard').innerHTML = `${html}<div class="row" style="margin-top:8px;opacity:.8"><span>you</span><span class="aura">${myProfit}</span></div>`
 }
 
 $('copyKey').addEventListener('click', () => {
   void navigator.clipboard?.writeText(privateKey)
-  $('copyKey').textContent = 'COPIÉE'
+  $('copyKey').textContent = 'COPIED'
 })
 
 
