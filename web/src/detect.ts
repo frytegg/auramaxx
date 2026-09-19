@@ -34,7 +34,7 @@ export type Options = {
 export const DEFAULTS: Options = {
   threshold: 60,
   minArea: 6,
-  radius: 10,
+  radius: 18, // bench 19 Sept: 10 was too tight, a moving screen spawned a trail of sources
   cooldownMs: 4000,
   tickMs: 4000,
   mode: 'A',

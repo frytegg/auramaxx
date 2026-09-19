@@ -53,11 +53,34 @@ check('a small hand movement is still the same screen', () => {
   assert.equal(t.total, 1)
 })
 
-check('KNOWN EXPLOIT: moving beyond the radius counts again', () => {
+check('ONE phone waved across the room cannot farm the counter', () => {
   const t = new SourceTracker({ ...options })
-  t.ingest([at(100, 50)], 0)
-  t.ingest([at(140, 50)], 200) // a metre to the left
-  assert.equal(t.total, 2, 'documented: this is why the operator can switch to mode B on T')
+  // reproduces the real bench result: one phone, wild movement, blob vanishing and reappearing
+  // far away as the screen tilts. Before the rate cap this reached ~94.
+  let ms = 0
+  for (let sweep = 0; sweep < 12; sweep++) {
+    for (let step = 0; step < 20; step++) {
+      const x = 20 + ((sweep % 2 === 0 ? step : 19 - step) * 14)
+      const visible = step % 3 !== 0 // the screen angles away every third frame
+      t.ingest(visible ? [at(x, 40 + (step % 5) * 9)] : [], ms)
+      ms += 16
+    }
+  }
+  const windows = Math.ceil(ms / options.cooldownMs)
+  assert.ok(t.total <= windows, `one screen may score at most once per 4s window: got ${t.total} over ${windows} windows`)
+  assert.ok(t.total >= 1, 'it must still count at least once')
+})
+
+check('the cap scales with the number of screens actually in the room', () => {
+  const t = new SourceTracker({ ...options })
+  const forty = Array.from({ length: 40 }, (_, i) => at(10 + (i % 20) * 15, 30 + Math.floor(i / 20) * 60))
+  t.ingest(forty, 0)
+  assert.equal(t.total, 40, '40 phones all count on the first window')
+  for (let ms = 100; ms < 3900; ms += 100) t.ingest(forty, ms)
+  assert.equal(t.total, 40, 'holding them up does not add more inside the window')
+  t.ingest([], 4100)
+  t.ingest(forty, 4200)
+  assert.equal(t.total, 80, 'the next window allows another 40')
 })
 
 check('two phones side by side are two sources', () => {

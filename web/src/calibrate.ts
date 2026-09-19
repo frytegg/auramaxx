@@ -133,6 +133,8 @@ function draw(): void {
 
   el.total.textContent = String(result.total)
   el.visible.textContent = String(result.visible)
+  const cap = document.getElementById('capInfo')
+  if (cap) cap.textContent = `max +${result.visible}/4s (1 par écran)`
   el.mode.textContent = detector.options.mode
 
   frames += 1
