@@ -3,93 +3,210 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AURAMAXX — camera calibration</title>
+    <meta name="theme-color" content="#0B0710" />
+    <title>AURAMAXX — Camera</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;600;700&display=swap" />
     <style>
-      :root { color-scheme: dark; }
-      * { box-sizing: border-box; }
+      /* The room's own feed on the projector: the video, the count, and nothing else.
+         Calibration lives in a drawer (S) so it never reaches the wall by accident. */
+      :root {
+        color-scheme: dark;
+        --bg: #0B0710;
+        --surface: #140F19;
+        --surface-2: #1B1522;
+        --surface-3: #241C2C;
+        --border: #2A2031;
+        --border-strong: #3B2E44;
+        --text: #F6F1F5;
+        --muted: #A493A8;
+        --faint: #6F6275;
+        --magenta: #FF2E9E;
+        --over: #35E28C;
+        --under: #FF4D6A;
+        --amber: #FFB547;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body { height: 100%; }
       body {
-        margin: 0; background: #0a0a0f; color: #eee;
-        font: 14px ui-monospace, "SF Mono", Menlo, monospace;
+        background: var(--bg); color: var(--text); overflow: hidden;
+        font: 15px/1.45 'Space Grotesk', system-ui, sans-serif; -webkit-font-smoothing: antialiased;
       }
-      .wrap { display: grid; grid-template-columns: 1fr 300px; height: 100vh; }
-      .stage { position: relative; background: #000; overflow: hidden; }
-      video, canvas.overlay { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
-      .hud {
-        position: absolute; left: 16px; top: 16px; z-index: 5;
-        background: rgba(0,0,0,.72); padding: 12px 16px; border-radius: 10px; line-height: 1.5;
+      body.idle-cursor { cursor: none; }
+      button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+      [hidden] { display: none !important; }
+
+      /* --- the stage: the room, full bleed ------------------------------------------------ */
+      .stage { position: fixed; inset: 0; background: #000; }
+      video, canvas.overlay { position: absolute; inset: 0; width: 100%; height: 100%; }
+      video { object-fit: cover; }
+      .shade { position: absolute; inset: 0; pointer-events: none;
+        background: linear-gradient(180deg, rgba(11,7,16,.72) 0%, rgba(11,7,16,0) 22%, rgba(11,7,16,0) 58%, rgba(11,7,16,.82) 100%); }
+
+      .top { position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 28px 36px; }
+      .logo { display: flex; align-items: center; gap: 12px; }
+      .logo .word { font-family: 'Anton', sans-serif; font-size: 34px; letter-spacing: 2px; color: var(--magenta); line-height: 1; }
+      .logo .badge { font-size: 14px; font-weight: 600; color: var(--muted); border: 1px solid var(--border-strong); background: rgba(11,7,16,.55); padding: 3px 10px; border-radius: 7px; }
+      .status {
+        display: inline-flex; align-items: center; gap: 10px; height: 46px; padding: 0 20px; border-radius: 999px;
+        font-size: 18px; font-weight: 600; color: var(--muted); background: rgba(11,7,16,.7); border: 1px solid var(--border-strong);
+        backdrop-filter: blur(8px);
       }
-      .count { font-size: 76px; font-weight: 800; color: #FF00E5; line-height: 1; }
-      .sub { opacity: .75; }
-      .panel { padding: 16px; background: #12121a; overflow-y: auto; }
-      .panel h1 { font-size: 15px; margin: 0 0 12px; letter-spacing: .08em; text-transform: uppercase; }
-      label { display: block; margin: 14px 0 4px; opacity: .8; }
-      input[type=range] { width: 100%; accent-color: #FF00E5; }
-      .val { color: #FF00E5; }
-      button {
-        width: 100%; margin-top: 8px; padding: 10px; border: 1px solid #333; border-radius: 8px;
-        background: #1c1c26; color: #eee; font: inherit; cursor: pointer;
+      .status i { width: 11px; height: 11px; border-radius: 50%; background: var(--faint); }
+      .status.live { color: var(--text); border-color: rgba(255,46,158,.55); }
+      .status.live i { background: var(--under); animation: pulse 1.2s ease-in-out infinite; }
+      .status.final { color: var(--over); border-color: rgba(53,226,140,.45); }
+      .status.final i { background: var(--over); }
+      .status.warn { color: var(--under); border-color: rgba(255,77,106,.55); }
+      .status.warn i { background: var(--under); }
+      @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,77,106,.6); } 50% { box-shadow: 0 0 0 8px rgba(255,77,106,0); } }
+
+      /* the count, like the headline number of a market */
+      .counter {
+        position: absolute; left: 36px; bottom: 36px; min-width: 340px; padding: 22px 30px 26px;
+        border-radius: 24px; background: rgba(11,7,16,.74); border: 1px solid var(--border-strong); backdrop-filter: blur(10px);
       }
-      button:hover { border-color: #FF00E5; }
-      .keys { margin-top: 18px; padding-top: 12px; border-top: 1px solid #262633; opacity: .7; font-size: 12px; line-height: 1.8; }
-      kbd { background: #262633; padding: 1px 6px; border-radius: 4px; }
-      .warn { color: #ffb86b; margin-top: 10px; font-size: 12px; line-height: 1.5; }
-      @media (max-width: 800px) { .wrap { grid-template-columns: 1fr; } }
+      .counter .label { font-size: 22px; font-weight: 600; color: var(--muted); }
+      .counter .n {
+        font-size: clamp(120px, 15vw, 230px); line-height: .95; font-weight: 700; color: var(--magenta);
+        font-variant-numeric: tabular-nums; letter-spacing: -0.02em; margin-top: 4px; transform-origin: left bottom;
+      }
+      .counter .n.bump { animation: bump .35s ease-out; }
+      @keyframes bump { 0% { transform: scale(1.09); } 100% { transform: scale(1); } }
+      .counter .sub { margin-top: 8px; font-size: 20px; color: var(--muted); font-variant-numeric: tabular-nums; }
+      .counter .sub b { color: var(--text); font-weight: 700; }
+      .counter.dim .n { color: var(--faint); }
+      .counter.final .n { color: var(--text); }
+
+      /* when there is no picture, say so: a black wall with no explanation looks like a crash */
+      .nocam { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; }
+      .nocam > div { max-width: 560px; padding: 28px 32px; border-radius: 20px; background: var(--surface); border: 1px solid var(--border); }
+      .nocam b { display: block; font-size: 26px; margin-bottom: 8px; }
+      .nocam p { color: var(--muted); font-size: 17px; }
+
+      .toast {
+        position: absolute; right: 36px; bottom: 36px; padding: 10px 16px; border-radius: 12px; font-size: 15px; color: var(--muted);
+        background: rgba(11,7,16,.74); border: 1px solid var(--border-strong); transition: opacity .6s ease;
+      }
+      .toast.gone { opacity: 0; }
+      kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border-radius: 5px; border: 1px solid var(--border-strong); background: var(--surface-2); font: 600 13px 'Space Grotesk', sans-serif; text-align: center; color: var(--text); }
+
+      /* --- calibration drawer (S) ---------------------------------------------------------- */
+      .drawer {
+        position: fixed; top: 0; right: 0; bottom: 0; width: 380px; z-index: 20; overflow-y: auto;
+        background: var(--surface); border-left: 1px solid var(--border); transform: translateX(100%); transition: transform .22s ease;
+      }
+      .drawer.open { transform: none; }
+      .dhead { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; padding: 20px 22px; background: var(--surface); border-bottom: 1px solid var(--border); }
+      .dhead strong { font-size: 18px; font-weight: 700; }
+      .dhead small { display: block; font-size: 13px; color: var(--faint); }
+      .close { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--border-strong); font-size: 18px; color: var(--muted); }
+      .close:hover { color: var(--text); border-color: var(--text); }
+      .dbody { padding: 18px 22px 28px; display: flex; flex-direction: column; gap: 18px; }
+      .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+      .stat { padding: 10px 12px; border-radius: 12px; background: var(--surface-2); }
+      .stat span { display: block; font-size: 12px; color: var(--faint); }
+      .stat b { display: block; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .stat.wide { grid-column: 1 / -1; }
+      .section { font-size: 14px; font-weight: 600; color: var(--muted); }
+      .field { display: flex; flex-direction: column; gap: 8px; }
+      .field .row { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
+      .field .row span { color: var(--muted); }
+      .field .row b { color: var(--magenta); font-weight: 700; font-variant-numeric: tabular-nums; }
+      input[type=range] { width: 100%; accent-color: var(--magenta); }
+      .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+      .act { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 44px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--border-strong); font-size: 14px; font-weight: 600; text-align: left; transition: border-color .15s; }
+      .act:hover { border-color: var(--text); }
+      .act.danger { color: var(--under); border-color: rgba(255,77,106,.45); }
+      .act.wide { grid-column: 1 / -1; }
+      .note { font-size: 13px; line-height: 1.5; color: var(--muted); padding: 12px 14px; border-radius: 12px; background: var(--surface-2); }
+      .note.warn { color: var(--amber); }
     </style>
   </head>
   <body>
-    <div class="wrap">
-      <div class="stage">
-        <video id="video" autoplay playsinline muted></video>
-        <canvas id="overlay" class="overlay"></canvas>
-        <div class="hud">
-          <div class="count" id="total">0</div>
-          <div class="sub">visible now: <span id="visible">0</span> · mode <span id="mode">A</span></div>
-          <div class="sub" id="perf">— ms/frame · — fps</div>
-          <div class="sub">cap: <span id="capInfo">—</span></div>
-          <div class="sub" id="device">no camera</div>
+    <main class="stage">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="overlay" class="overlay"></canvas>
+      <div class="shade"></div>
+
+      <div class="nocam" id="nocam">
+        <div><b id="nocamTitle">Waiting for the camera…</b><p id="nocamText">Allow the camera when the browser asks.</p></div>
+      </div>
+
+      <div class="top">
+        <div class="logo"><span class="word">AURAMAXX</span><span class="badge">Live camera</span></div>
+        <div class="status" id="status"><i></i><span id="statusText">Connecting…</span></div>
+      </div>
+
+      <div class="counter dim" id="counter">
+        <div class="label" id="counterLabel">Light-ups</div>
+        <div class="n" id="total">0</div>
+        <div class="sub" id="counterSub"><b id="visible">0</b> screens on camera right now</div>
+      </div>
+
+      <div class="toast" id="toast"><kbd>S</kbd> calibration · <kbd>F</kbd> fullscreen</div>
+    </main>
+
+    <aside class="drawer" id="drawer" aria-label="Calibration">
+      <div class="dhead">
+        <div><strong>Calibration</strong><small>Hidden from the room · press S to close</small></div>
+        <button class="close" id="closeDrawer" aria-label="Close">×</button>
+      </div>
+      <div class="dbody">
+        <div class="stats">
+          <div class="stat wide"><span>Camera</span><b id="device">no camera</b></div>
+          <div class="stat"><span>Screens · blobs</span><b id="blobs">—</b></div>
+          <div class="stat"><span>Mode</span><b id="mode">A</b></div>
+          <div class="stat"><span>Frame</span><b id="perf">—</b></div>
+          <div class="stat"><span>Cap</span><b id="capInfo">—</b></div>
+          <div class="stat wide"><span>Game link</span><b id="linkInfo">—</b></div>
+        </div>
+
+        <div class="section">Detection</div>
+        <div class="field">
+          <div class="row"><span>Magenta threshold</span><b id="vThreshold">60</b></div>
+          <input type="range" id="threshold" min="10" max="200" value="60" />
+        </div>
+        <div class="field">
+          <div class="row"><span>Min blob area (px)</span><b id="vMinArea">6</b></div>
+          <input type="range" id="minArea" min="1" max="80" value="6" />
+        </div>
+        <div class="field">
+          <div class="row"><span>Weak ratio (hysteresis)</span><b id="vWeak">0.55</b></div>
+          <input type="range" id="weakRatio" min="0.2" max="1" step="0.05" value="0.55" />
+        </div>
+        <div class="field">
+          <div class="row"><span>Merge ratio (× screen size)</span><b id="vMergeGap">0.60</b></div>
+          <input type="range" id="mergeGap" min="0" max="2" step="0.05" value="0.6" />
+        </div>
+        <div class="field">
+          <div class="row"><span>Match radius (px)</span><b id="vRadius">12</b></div>
+          <input type="range" id="radius" min="3" max="60" value="12" />
+        </div>
+        <div class="field">
+          <div class="row"><span>Cooldown (ms)</span><b id="vCooldown">4000</b></div>
+          <input type="range" id="cooldown" min="500" max="10000" step="250" value="4000" />
+        </div>
+
+        <div class="section">Controls</div>
+        <div class="actions">
+          <button class="act" id="switchCam">Switch camera <kbd>C</kbd></button>
+          <button class="act" id="toggleMode">Mode A ⇄ B <kbd>T</kbd></button>
+          <button class="act" id="reference">Capture reference <kbd>R</kbd></button>
+          <button class="act" id="reset">Reset count <kbd>0</kbd></button>
+          <button class="act" id="fullscreen">Fullscreen <kbd>F</kbd></button>
+          <button class="act danger" id="kill">Kill video <kbd>V</kbd></button>
+          <button class="act wide" id="defaults">Restore default settings</button>
+        </div>
+
+        <div class="note" id="hint">
+          Point the camera at the room, put phones on solid magenta at full brightness, and check that
+          two phones 30 cm apart stay two separate boxes at the back of the room. Settings are saved
+          in this browser.
         </div>
       </div>
-      <div class="panel">
-        <h1>Calibration</h1>
+    </aside>
 
-        <label>magenta threshold: <span class="val" id="vThreshold">60</span></label>
-        <input type="range" id="threshold" min="10" max="200" value="60" />
-
-        <label>min blob area (px): <span class="val" id="vMinArea">6</span></label>
-        <input type="range" id="minArea" min="1" max="80" value="6" />
-
-        <label>weak ratio (hysteresis): <span class="val" id="vWeak">0.55</span></label>
-        <input type="range" id="weakRatio" min="0.2" max="1" step="0.05" value="0.55" />
-
-        <label>merge ratio (× taille écran): <span class="val" id="vMergeGap">0.60</span></label>
-        <input type="range" id="mergeGap" min="0" max="2" step="0.05" value="0.6" />
-
-        <label>match radius (px): <span class="val" id="vRadius">12</span></label>
-        <input type="range" id="radius" min="3" max="60" value="12" />
-
-        <label>cooldown (ms): <span class="val" id="vCooldown">4000</span></label>
-        <input type="range" id="cooldown" min="500" max="10000" step="250" value="4000" />
-
-        <button id="switchCam">switch camera (C)</button>
-        <button id="toggleMode">mode A ⇄ B (T)</button>
-        <button id="reference">capture reference (R)</button>
-        <button id="reset">reset count (0)</button>
-        <button id="kill">kill video (V)</button>
-
-        <div class="warn" id="hint">
-          Point the camera at the room, put phones on solid #FF00E5 at full brightness, and check
-          that two phones 30 cm apart stay two separate boxes at the back of the room.
-        </div>
-
-        <div class="keys">
-          <div><kbd>C</kbd> cycle camera</div>
-          <div><kbd>T</kbd> mode A (per-spot) ⇄ B (tick)</div>
-          <div><kbd>R</kbd> capture reference at lock</div>
-          <div><kbd>0</kbd> reset the count</div>
-          <div><kbd>V</kbd> kill the video</div>
-        </div>
-      </div>
-    </div>
     <script type="module" src="/src/calibrate.ts"></script>
   </body>
 </html>
