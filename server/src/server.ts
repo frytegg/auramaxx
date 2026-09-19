@@ -20,6 +20,8 @@ import {
   onBroadcast,
   openRound,
   payout,
+  resume,
+  StateError,
   start,
   setCount,
   settle,
@@ -54,7 +56,9 @@ await app.register(fastifyStatic, {
 })
 
 type Socket = { send: (data: string) => void; readyState: number }
-const sockets = new Map<Socket, { address?: Address }>()
+/** `id` tells two camera pages apart, so only one of them owns a round's count. */
+const sockets = new Map<Socket, { id: number; address?: Address }>()
+let socketIds = 0
 let seq = 0
 
 function broadcast(event: unknown): void {
@@ -115,7 +119,7 @@ app.get('/api/qr.svg', async (request, reply) => {
 app.register(async (scope) => {
   scope.get('/ws', { websocket: true }, (socket) => {
     const s = socket as unknown as Socket
-    sockets.set(s, {})
+    sockets.set(s, { id: ++socketIds })
     sendTo(s, snapshot())
 
     socket.on('message', (raw: Buffer) => {
@@ -158,7 +162,7 @@ app.register(async (scope) => {
           case 'camera': {
             // only the projector sends this, and only with the operator key
             if (msg.key !== env.OP_KEY) return
-            cameraUpdate(Number(msg.total ?? 0), Number(msg.visible ?? 0))
+            cameraUpdate(Number(msg.total ?? 0), Number(msg.visible ?? 0), meta.id)
             break
           }
           case 'resync': {
@@ -197,13 +201,26 @@ app.post('/op/reset', async (request, reply) => {
 app.post('/op/open', async (request, reply) => {
   if (!guard(request)) return reply.code(403).send({ error: 'nope' })
   // the game is two magenta rounds: the BTC question was dropped, so every round is kind 1
-  await openRound(1)
+  try {
+    await openRound(1)
+  } catch (error: unknown) {
+    // refused because of where the game is (mid-round, both rounds played): say why, change nothing
+    if (error instanceof StateError) return reply.code(409).send({ error: error.message })
+    throw error
+  }
   return { ok: true }
 })
 
 app.post('/op/start', async (request, reply) => {
   if (!guard(request)) return reply.code(403).send({ error: 'nope' })
   start()
+  return { ok: true }
+})
+
+/** A reveal pauses the clock; the régie restarts it once the room has re-bet, or chosen not to. */
+app.post('/op/resume', async (request, reply) => {
+  if (!guard(request)) return reply.code(403).send({ error: 'nope' })
+  if (!resume()) return reply.code(409).send({ error: 'no paused reveal to resume' })
   return { ok: true }
 })
 
@@ -229,8 +246,13 @@ app.post('/op/count', async (request, reply) => {
 
 app.post('/op/payout', async (request, reply) => {
   if (!guard(request)) return reply.code(403).send({ error: 'nope' })
-  const result = await payout()
-  return { ok: true, ...result }
+  try {
+    return { ok: true, ...(await payout()) }
+  } catch (error: unknown) {
+    // a round still running: refused, nothing sent
+    if (error instanceof StateError) return reply.code(409).send({ error: error.message })
+    throw error
+  }
 })
 
 app.setNotFoundHandler((request, reply) => {

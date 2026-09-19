@@ -333,7 +333,11 @@ function updateStatus(): void {
     $('statusText').textContent = `${sideName(selectedSide)} — pick your stake`
   } else {
     $('statusText').textContent =
-      round?.phase === 'reveal' ? 'REVEAL — 5 s to bet' : round?.phase === 'open' ? 'Pick a side' : 'Betting closed'
+      round?.phase === 'reveal'
+        ? 'REVEAL: the clock is paused. Bet again, or keep your bet'
+        : round?.phase === 'open'
+          ? 'Pick a side'
+          : 'Betting closed'
   }
 
   // each side shows what YOU have on it, so a split bet is readable at a glance
@@ -513,7 +517,11 @@ function handle(msg: Record<string, unknown>): void {
       if (round) round.phase = String(msg.phase ?? round.phase)
       const remaining = Number(msg.remainingMs ?? 0)
       const betting = msg.phase === 'open'
-      $('clock').textContent = betting ? 'BETS OPEN' : `${(remaining / 1000).toFixed(1)}s`
+      $('clock').textContent = betting
+        ? 'BETS OPEN'
+        : msg.phase === 'reveal'
+          ? `PAUSED · ${Math.ceil(remaining / 1000)}s LEFT`
+          : `${(remaining / 1000).toFixed(1)}s`
       $('clock').classList.toggle('paused', betting || msg.phase === 'reveal')
       $('magentaClock').textContent = `${Math.ceil(remaining / 1000)}s`
       if (msg.hidden === false) showMults(msg)
@@ -569,12 +577,15 @@ function handle(msg: Record<string, unknown>): void {
       const won = onWinner > 0
       const you = msg.you as Record<string, unknown> | undefined
       // a hedged player has won something and lost something: say so rather than pick a side
-      const verdict = myStake === 0 ? '—' : !won ? 'LOST' : onLoser > 0 ? 'SPLIT' : 'WON'
+      const verdict = myStake === 0 ? 'NO BET' : !won ? 'LOST' : onLoser > 0 ? 'SPLIT' : 'WON'
       $('resultBig').textContent = verdict
       $('resultBig').style.color =
         myStake === 0 ? '#888' : verdict === 'WON' ? 'var(--up)' : verdict === 'SPLIT' ? 'var(--gold)' : 'var(--down)'
       const label = winner === 0 ? 'OVER' : 'UNDER'
-      $('resultSub').textContent = `${label} · ${String(msg.count ?? 0)} light-ups counted, line ${String(msg.threshold ?? 0)} · round ${manche}/2`
+      const outcome = `${label} · ${String(msg.count ?? 0)} light-ups counted, line ${String(msg.threshold ?? 0)} · round ${manche}/2`
+      // sitting a round out is not losing it: say which of the two it was
+      const why = myStake > 0 ? '' : Number(msg.bettors ?? -1) === 0 ? 'Nobody bet this round · ' : 'You sat this round out · '
+      $('resultSub').textContent = `${why}${outcome}`
       // 'resolved' is a broadcast with no per-player field: read this phone's score off the board
       const board = msg.leaderboard as Array<Record<string, unknown>> | undefined
       const mine = board?.find((row) => String(row.address ?? '').toLowerCase() === account.address.toLowerCase())
@@ -595,9 +606,13 @@ function handle(msg: Record<string, unknown>): void {
       break
     }
     case 'payout': {
-      $('resultBig').textContent = 'PAID'
+      const sent = typeof msg.txHash === 'string'
+      $('resultBig').textContent = sent ? 'PAID' : 'NO PAYOUT'
       $('resultBig').style.color = 'var(--magenta)'
-      $('resultSub').textContent = `${String(msg.winners ?? 0)} winners · ${Number(msg.totalMon ?? 0).toFixed(2)} MON sent`
+      // nothing owed means nothing sent: never announce a payment that did not happen
+      $('resultSub').textContent = sent
+        ? `${String(msg.winners ?? 0)} winners · ${Number(msg.totalMon ?? 0).toFixed(2)} MON sent`
+        : 'Nobody made a profit this game, so there was no MON to send'
       $('walletBox').style.display = 'block'
       $('walletKey').textContent = privateKey
       show('vResult')
@@ -634,6 +649,12 @@ function setHidden(hidden: boolean): void {
 }
 
 function showMults(msg: Record<string, unknown>): void {
+  // an empty pot has no odds: the regularised 2.00x would be a number that means nothing
+  if (Number(msg.poolUp ?? 0) + Number(msg.poolDown ?? 0) === 0) {
+    $('upMult').textContent = 'No bets yet'
+    $('downMult').textContent = 'No bets yet'
+    return
+  }
   const up = Number(msg.mult_up_x100 ?? msg.up ?? 0)
   const down = Number(msg.mult_down_x100 ?? msg.down ?? 0)
   $('upMult').textContent = fmtMult(up)

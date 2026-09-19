@@ -59,6 +59,17 @@
       .status.final i { background: var(--over); }
       .status.warn { color: var(--under); border-color: rgba(255,77,106,.55); }
       .status.warn i { background: var(--under); }
+      .status.paused { color: var(--amber); border-color: rgba(255,181,71,.55); }
+      .status.paused i { background: var(--amber); }
+
+      /* the round's clock, centred for the room; amber while a reveal holds it */
+      .camClock {
+        position: absolute; top: 18px; left: 50%; transform: translateX(-50%); padding: 4px 26px; border-radius: 20px;
+        font-size: 64px; line-height: 1.1; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+        background: rgba(11,7,16,.7); border: 1px solid var(--border-strong); backdrop-filter: blur(8px);
+      }
+      .camClock.hot { color: var(--magenta); }
+      .camClock.paused { color: var(--amber); }
       @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,77,106,.6); } 50% { box-shadow: 0 0 0 8px rgba(255,77,106,0); } }
 
       /* the count, like the headline number of a market */
@@ -77,6 +88,7 @@
       .counter .sub b { color: var(--text); font-weight: 700; }
       .counter.dim .n { color: var(--faint); }
       .counter.final .n { color: var(--text); }
+      .counter.paused .n { color: var(--amber); }
 
       /* when there is no picture, say so: a black wall with no explanation looks like a crash */
       .nocam { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; }
@@ -137,6 +149,7 @@
         <div class="logo"><span class="word">AURAMAXX</span><span class="badge">Live camera</span></div>
         <div class="status" id="status"><i></i><span id="statusText">Connecting…</span></div>
       </div>
+      <div class="camClock num" id="camClock" hidden>0:45</div>
 
       <div class="counter dim" id="counter">
         <div class="label" id="counterLabel">Light-ups</div>

@@ -10,8 +10,6 @@ export const Q1_MS = 30_000
 export const Q2_MS = 45_000
 /** Two magenta rounds make a game. */
 export const MANCHES = 2
-/** How long each reveal keeps betting open. The clock does not stop: the room keeps counting. */
-export const REVEAL_WINDOW_MS = 5_000
 /** Mirrors Auramaxx.sol, only to show a projected line before the contract computes the real one. */
 const TICKS = 11
 const THRESHOLD_PCT = 45
@@ -19,8 +17,9 @@ const THRESHOLD_PCT = 45
 export type Side = 0 | 1
 /**
  * A manche: 'open' = bets before the clock (no time limit), 'live' = the 45 s clock runs, bets are
- * locked and the room shows magenta, 'reveal' = a short betting window at 1/3 and 2/3 while the
- * clock and the camera keep running, then 'frozen' → 'settling' → 'resolved' on their own.
+ * locked and the room shows magenta, 'reveal' = at 1/3 and 2/3 the clock PAUSES, the odds are shown
+ * and betting reopens, until the régie resumes it (it checks the room has re-bet, or chosen not
+ * to); then 'frozen' → 'settling' → 'resolved' on their own when the 45 s are up.
  */
 export type Phase = 'idle' | 'open' | 'live' | 'reveal' | 'frozen' | 'settling' | 'resolved'
 
@@ -58,7 +57,8 @@ type RoundState = {
   lastTick: number
   running: boolean
   revealsDone: number
-  revealUntil: number
+  /** Who has bet since the current reveal paused the clock: what the régie waits on. */
+  rebet: Set<Address>
   hidden: boolean
   entries: Entry[]
   /** Per player, both legs. The BUDGET caps `up + down`, so hedging spends the same chips. */
@@ -86,6 +86,15 @@ let manche = 0
  */
 type Standing = { address: Address; name: string; avatar: number; profit: number }
 let finalStandings: Standing[] | null = null
+/**
+ * Every transaction this game sent that the room can open in the explorer: the bets going on
+ * chain, each settlement, the MON payout. Real hashes only, straight from the receipts.
+ */
+type Receipt = { label: string; hash: Hex }
+let receipts: Receipt[] = []
+/** The one camera page whose count settles this round (see cameraUpdate). */
+let cameraSource: { id: number; at: number } | null = null
+const CAMERA_HANDOVER_MS = 2_000
 /**
  * 0 means no game is open and the projector shows its landing page.
  *
@@ -128,6 +137,7 @@ export function newGame(): { gameId: number; players: number } {
   round = null
   manche = 0
   finalStandings = null
+  receipts = []
   const fromLanding = gameId === 0
   forgetPlayers((p) => fromLanding && p.game === 0)
   gameSeq += 1
@@ -147,6 +157,7 @@ export function resetGame(): { gameId: number } {
   round = null
   manche = 0
   finalStandings = null
+  receipts = []
   gameId = 0
   forgetPlayers(() => false)
   emit({ type: 'game', gameId, players: 0, roster: [], leaderboard: [] })
@@ -264,6 +275,7 @@ export async function bet(
   if (recovered.toLowerCase() !== address.toLowerCase()) return { ok: false, code: 'BAD_SIG' }
 
   round.entries.push({ player: address, side, stake: amount, nonce, sig })
+  if (round.phase === 'reveal') round.rebet.add(address)
   const next = side === 0 ? { ...current, up: current.up + amount } : { ...current, down: current.down + amount }
   round.stake.set(address, next)
   if (side === 0) round.poolUp += amount
@@ -274,7 +286,36 @@ export async function bet(
 
 // --- the round machine -------------------------------------------------------------------
 
+/** An operator command that does not fit the game's current state: refused, never half-applied. */
+export class StateError extends Error {}
+
+/** A round is being opened on chain right now: a second request must not open a second round. */
+let opening = false
+
+/**
+ * Opening replaces `round`, so it is only allowed between rounds. Without this, a stale régie tab
+ * or a second operator pressing "Open betting" mid-round wiped the round in progress — bets,
+ * pause and all — and put a fresh one in its place.
+ */
+function cannotOpen(): string | null {
+  if (opening) return 'a round is already being opened'
+  if (round && round.phase !== 'resolved') return `round ${manche} is still ${round.phase}: it has to settle first`
+  if (manche >= MANCHES) return `both rounds of this game are played: start a new game`
+  return null
+}
+
 export async function openRound(kind: 0 | 1): Promise<void> {
+  const refused = cannotOpen()
+  if (refused) throw new StateError(refused)
+  opening = true
+  try {
+    await openRoundOnChain(kind)
+  } finally {
+    opening = false
+  }
+}
+
+async function openRoundOnChain(kind: 0 | 1): Promise<void> {
   // the régie can open a round without anyone having pressed "Start a game" on the projector;
   // give that path a game too, so both entry points leave the same state behind
   if (gameId === 0) newGame()
@@ -303,7 +344,7 @@ export async function openRound(kind: 0 | 1): Promise<void> {
     lastTick: Date.now(),
     running: false, // the clock starts on /op/start, once the room has placed its bets
     revealsDone: 0,
-    revealUntil: 0,
+    rebet: new Set(),
     hidden: true,
     entries: [],
     stake: new Map(),
@@ -333,8 +374,24 @@ export function start(): void {
   round.elapsedMs = 0
   round.count = 0
   round.visible = 0
+  cameraSource = null
   emit({ type: 'start', roundId: round.id, durationMs: round.durationMs, threshold: projectedThreshold(round) })
   log.info({ id: round.id, bettors: round.stake.size }, 'clock started')
+}
+
+/**
+ * The régie restarts the clock after a reveal. The pause lasts as long as the room needs to read
+ * the odds and re-bet; the operator decides when that is, never a timer.
+ */
+export function resume(): boolean {
+  if (!round || round.phase !== 'reveal') return false
+  round.phase = 'live'
+  round.hidden = true
+  round.running = true
+  round.lastTick = Date.now()
+  emit({ type: 'reveal_end', roundId: round.id, n: round.revealsDone, rebet: round.rebet.size })
+  log.info({ id: round.id, reveal: round.revealsDone, rebet: round.rebet.size }, 'clock resumed')
+  return true
 }
 
 /**
@@ -347,10 +404,19 @@ function projectedThreshold(_r: RoundState): number {
   return Math.floor(((registeredOnChain + pending) * TICKS * THRESHOLD_PCT) / 100)
 }
 
-/** The camera page pushes this; it is also what settles a magenta round. */
-export function cameraUpdate(total: number, visible: number): void {
-  // only the 45 s window counts: lights before the start or after the end are ignored
-  if (!round || round.kind !== 1 || (round.phase !== 'live' && round.phase !== 'reveal')) return
+/**
+ * The camera page pushes this; it is also what settles a magenta round. Only the running clock
+ * counts: lights before the start, during a reveal's pause, or after the end are ignored.
+ *
+ * One camera page per round: the first to push after the start owns the count, and another only
+ * takes over if the owner goes quiet. Two pages (the projector's and a calibration tab left open)
+ * each run their own detector, and taking whichever spoke last would make the number jump.
+ */
+export function cameraUpdate(total: number, visible: number, source: number): void {
+  if (!round || round.kind !== 1 || round.phase !== 'live') return
+  const now = Date.now()
+  if (cameraSource && cameraSource.id !== source && now - cameraSource.at < CAMERA_HANDOVER_MS) return
+  cameraSource = { id: source, at: now }
   round.count = total
   round.visible = visible
 }
@@ -374,7 +440,8 @@ export async function freezeNow(): Promise<void> {
           BigInt(round.id),
           c.map((e) => ({ player: e.player, side: e.side, stake: BigInt(e.stake), nonce: e.nonce, sig: e.sig })),
         ] as const
-        await send('commitBatch', commitArgs, await gasFor('commitBatch', commitArgs, GAS.commit(c.length)))
+        const committed = await send('commitBatch', commitArgs, await gasFor('commitBatch', commitArgs, GAS.commit(c.length)))
+        receipts.push({ label: `Round ${manche} · ${c.length} signed ${c.length === 1 ? 'bet' : 'bets'} on chain`, hash: committed.hash })
       }
     }
     await send('freeze', [BigInt(round.id)], await gasFor('freeze', [BigInt(round.id)], GAS.freeze))
@@ -418,6 +485,7 @@ export async function settle(): Promise<void> {
       r.winner = r.threshold !== null && r.count > r.threshold ? 0 : 1
     }
 
+    if (r.txHash) receipts.push({ label: `Round ${manche} · settled`, hash: r.txHash })
     await refreshProfits()
     const winner = r.winner
     r.paid = [...r.stake.values()].filter((s) => (winner === 0 ? s.up : s.down) > 0).length
@@ -434,9 +502,12 @@ export async function settle(): Promise<void> {
       poolUp: r.poolUp,
       poolDown: r.poolDown,
       paid: r.paid,
+      // nobody bet: the room still sees the count against the line, but nothing was won or lost
+      bettors: r.stake.size,
       txHash: r.txHash,
       settleMs: r.settleMs,
       leaderboard: leaderboard(),
+      receipts,
     })
     log.info({ id: r.id, winner: r.winner, ms: Date.now() - started }, 'round resolved')
 
@@ -490,12 +561,24 @@ export async function refreshProfits(): Promise<Map<Address, number>> {
  * earlier game, since the contract cannot tell games apart. The numbers announced are therefore
  * computed from the contract's own figures for the whole range, so they match the transaction.
  */
-export async function payout(): Promise<{ hash: Hex; total: number; winners: number }> {
+export async function payout(): Promise<{ hash: Hex | null; total: number; winners: number }> {
+  // a round still running has profits still to come: paying now would pay the room twice over
+  if (round && round.phase !== 'resolved') {
+    throw new StateError(`round ${manche} is still ${round.phase}: pay out once it has settled`)
+  }
   const owed = [...(await refreshProfits()).values()].filter((profit) => profit > 0)
   const total = owed.reduce((sum, profit) => sum + profit / 100, 0)
+  if (owed.length === 0) {
+    // nobody made a profit (nobody bet, or every bet came back): no transaction to send and no hash
+    // to show. The screens say so instead of announcing a payment that did not happen.
+    emit({ type: 'payout', txHash: null, totalMon: 0, winners: 0, receipts })
+    log.info('payout skipped: nothing owed')
+    return { hash: null, total: 0, winners: 0 }
+  }
   const payoutArgs = [0, registeredOnChain] as const
   const result = await send('payoutMon', payoutArgs, await gasFor('payoutMon', payoutArgs, GAS.payout(registeredOnChain)))
-  emit({ type: 'payout', txHash: result.hash, totalMon: total, winners: owed.length })
+  receipts.push({ label: `MON payout · ${owed.length} ${owed.length === 1 ? 'winner' : 'winners'}`, hash: result.hash })
+  emit({ type: 'payout', txHash: result.hash, totalMon: total, winners: owed.length, receipts })
   return { hash: result.hash, total, winners: owed.length }
 }
 
@@ -548,6 +631,11 @@ export function snapshot(address?: Address): Record<string, unknown> {
           // only the pools are withheld outside a reveal
           count: round.count,
           visible: round.visible,
+          revealsDone: round.revealsDone,
+          // how many have bet, never on which side: it tells the régie whether to wait, and tells
+          // nobody anything about the pools
+          bettors: round.stake.size,
+          rebet: round.rebet.size,
           // counts are withheld entirely while hidden: sending them and hiding them client-side
           // puts them one DevTools tab away
           ...(round.hidden
@@ -571,6 +659,7 @@ export function snapshot(address?: Address): Record<string, unknown> {
       : null,
     leaderboard: leaderboard(),
     final: finalStandings,
+    receipts,
     roster: roster(),
     price: currentPrice(),
     priceHistory: priceHistory(Date.now() - 120_000),
@@ -635,7 +724,6 @@ export function startLoop(): void {
       const first = r.durationMs / 3
       const second = (r.durationMs * 2) / 3
 
-      if (r.phase === 'reveal' && r.elapsedMs >= r.revealUntil) closeReveal(r)
       if (r.revealsDone === 0 && r.elapsedMs >= first) doReveal(r, 1)
       else if (r.revealsDone === 1 && r.elapsedMs >= second) doReveal(r, 2)
       else if (r.elapsedMs >= r.durationMs) {
@@ -653,6 +741,8 @@ export function startLoop(): void {
       count: r.count,
       visible: r.visible,
       threshold: r.threshold ?? projectedThreshold(r),
+      bettors: r.stake.size,
+      rebet: r.rebet.size,
     })
   }, 100)
 }
@@ -663,16 +753,12 @@ async function endRound(): Promise<void> {
   if (round?.phase === 'frozen') await settle() // settle() puts it back to 'frozen' on failure: the régie can retry
 }
 
-function closeReveal(r: RoundState): void {
-  r.phase = 'live'
-  r.hidden = true
-  emit({ type: 'reveal_end', roundId: r.id })
-}
-
+/** 1/3 or 2/3 of the clock: pause it, show the odds, reopen betting until the régie resumes. */
 function doReveal(r: RoundState, n: number): void {
   r.revealsDone = n
   r.phase = 'reveal'
-  r.revealUntil = r.elapsedMs + REVEAL_WINDOW_MS
+  r.running = false
+  r.rebet = new Set()
   r.hidden = false
   const m = multipliers(r)
   emit({
@@ -686,7 +772,9 @@ function doReveal(r: RoundState, n: number): void {
     poolDown: r.poolDown,
     mult_up_x100: m.up,
     mult_down_x100: m.down,
-    windowMs: REVEAL_WINDOW_MS,
+    bettors: r.stake.size,
+    paused: true,
+    remainingMs: Math.max(0, r.durationMs - r.elapsedMs),
     count: r.count,
     threshold: projectedThreshold(r),
   })

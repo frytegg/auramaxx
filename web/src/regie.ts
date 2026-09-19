@@ -18,8 +18,6 @@ function $<T extends HTMLElement = HTMLElement>(id: string): T {
 }
 
 const MANCHES = 2
-/** Mirrors game.ts: each reveal keeps betting open this long while the clock keeps running. */
-const REVEAL_WINDOW_MS = 5_000
 /** Mirrors the README: 100 AURA of profit converts to 1 MON. */
 const AURA_PER_MON = 100
 const KEY_STORE = 'auramaxx.opkey'
@@ -27,10 +25,19 @@ const LOG_LIMIT = 200
 const STEPS = 7
 
 type Phase = 'idle' | 'open' | 'live' | 'reveal' | 'frozen' | 'settling' | 'resolved'
-type Op = 'game' | 'reset' | 'open' | 'start' | 'freeze' | 'settle' | 'payout' | 'count'
+type Op = 'game' | 'reset' | 'open' | 'start' | 'resume' | 'freeze' | 'settle' | 'payout' | 'count'
 type Msg = Record<string, unknown>
 type Row = { name: string; avatar: number; profit: number }
-type Verdict = { winner: 0 | 1; count: number; threshold: number | null; paid: number; txHash: string | null; settleMs: number | null }
+type Verdict = {
+  winner: 0 | 1
+  count: number
+  threshold: number | null
+  paid: number
+  /** 0 when nobody bet: the count still lands, but nothing was won or lost */
+  bettors: number | null
+  txHash: string | null
+  settleMs: number | null
+}
 type Payout = { winners: number; totalMon: number; txHash: string | null }
 type Action = { op: Op | null; label: string; hint: string; tone?: 'pay'; confirm?: string }
 
@@ -40,6 +47,7 @@ const OP_LABEL: Record<Op, string> = {
   reset: 'Back to landing',
   open: 'Open betting',
   start: 'Start clock',
+  resume: 'Resume clock',
   freeze: 'Stop clock',
   settle: 'Settle',
   payout: 'Payout',
@@ -66,6 +74,9 @@ const s = {
   threshold: null as number | null,
   thresholdOnChain: false,
   revealN: 0,
+  /** how many players have bet this round, and since the current reveal: never on which side */
+  bettors: null as number | null,
+  rebet: null as number | null,
   verdict: null as Verdict | null,
   payout: null as Payout | null,
   relayer: null as number | null,
@@ -170,7 +181,9 @@ async function op(name: Op, query: Record<string, string> = {}): Promise<boolean
       return false
     }
     if (!response.ok) {
-      log(`${OP_LABEL[name]} failed · HTTP ${response.status}`, 'err')
+      // a 409 is the server refusing a command the game's state does not allow: its reason says why
+      const reason = typeof body.error === 'string' ? body.error : `HTTP ${response.status}`
+      log(`${OP_LABEL[name]} ${response.status === 409 ? 'refused' : 'failed'} · ${reason}`, 'err')
       return false
     }
     s.keyState = 'accepted'
@@ -209,11 +222,29 @@ function nextAction(): Action {
             ? 'This also opens the game: the projector swaps its landing page for the join QR. Phones can bet as soon as it lands.'
             : 'Phones can bet as soon as this lands on-chain. No time limit: start the clock when the room is ready.',
       }
-    case 'open':
-      return { op: 'start', label: `Start the clock · ${seconds} s`, hint: 'Locks bets and turns every phone magenta. From here the round runs itself.' }
+    case 'open': {
+      const bettors = s.bettors ?? 0
+      return {
+        op: 'start',
+        label: `Start the clock · ${seconds} s`,
+        hint: `${bettors} of ${s.players} ${s.players === 1 ? 'player has' : 'players have'} bet. Starting locks bets and turns every phone magenta; the clock pauses by itself at each reveal.`,
+        confirm:
+          bettors === 0
+            ? 'Nobody has bet yet.\n\nStart the clock anyway? The round will run and settle, but nobody can win or lose anything.'
+            : undefined,
+      }
+    }
     case 'live':
-    case 'reveal':
       return { op: null, label: `Round ${s.manche} is running`, hint: liveHint() }
+    case 'reveal': {
+      const left = Math.max(0, Math.ceil(s.remainingMs / 1000))
+      const rebet = s.rebet ?? 0
+      return {
+        op: 'resume',
+        label: `Resume the clock · ${left} s left`,
+        hint: `Reveal ${s.revealN || ''}: the clock is paused and bets are open again. ${rebet} ${rebet === 1 ? 'player has' : 'players have'} bet since the pause, ${s.bettors ?? 0} of ${s.players} this round. Resume when the room is ready.`.replace('  ', ' '),
+      }
+    }
     case 'frozen':
       return {
         op: 'settle',
@@ -234,13 +265,9 @@ function liveHint(): string {
   const elapsed = s.durationMs - s.remainingMs
   const third = s.durationMs / 3
   const secs = (ms: number): number => Math.max(0, Math.ceil(ms / 1000))
-  if (s.phase === 'reveal') {
-    const n = s.revealN || (elapsed >= 2 * third ? 2 : 1)
-    return `Reveal ${n}: betting is open for ${secs(n * third + REVEAL_WINDOW_MS - elapsed)} more seconds while the clock keeps running.`
-  }
-  if (elapsed < third) return `Reveal 1 in ${secs(third - elapsed)} s. Nothing to do: at zero the round freezes and settles itself.`
-  if (elapsed < 2 * third) return `Reveal 2 in ${secs(2 * third - elapsed)} s. Nothing to do: at zero the round freezes and settles itself.`
-  return `Freezes and settles in ${secs(s.remainingMs)} s.`
+  if (elapsed < third) return `Reveal 1 in ${secs(third - elapsed)} s: the clock pauses there, and waits for you to resume it.`
+  if (elapsed < 2 * third) return `Reveal 2 in ${secs(2 * third - elapsed)} s: the clock pauses there, and waits for you to resume it.`
+  return `Freezes and settles by itself in ${secs(s.remainingMs)} s.`
 }
 
 /** 1-7 through the game: open, clock, live for each round, then the payout. 8 = all done. */
@@ -321,6 +348,9 @@ function handle(msg: Msg): void {
         s.remainingMs = num(round.remainingMs, s.remainingMs)
         s.count = optNum(round.count)
         s.threshold = optNum(round.threshold)
+        s.bettors = optNum(round.bettors)
+        s.rebet = optNum(round.rebet)
+        s.revealN = s.phase === 'reveal' ? num(round.revealsDone, 0) : 0
         if (s.hidden) {
           s.poolUp = null
           s.poolDown = null
@@ -391,6 +421,8 @@ function handle(msg: Msg): void {
       }
       s.count = optNum(msg.count) ?? s.count
       s.threshold = optNum(msg.threshold) ?? s.threshold
+      s.bettors = optNum(msg.bettors) ?? s.bettors
+      s.rebet = optNum(msg.rebet) ?? s.rebet
       addPoint()
       break
     }
@@ -402,12 +434,15 @@ function handle(msg: Msg): void {
       s.multDown = optNum(msg.mult_down_x100)
       s.bettorsUp = optNum(msg.up_count)
       s.bettorsDown = optNum(msg.down_count)
-      log(`Reveal ${s.revealN} · 5 s of betting · OVER ${fmt.format(s.poolUp ?? 0)} / UNDER ${fmt.format(s.poolDown ?? 0)} AURA`)
+      s.bettors = optNum(msg.bettors) ?? s.bettors
+      s.rebet = 0
+      log(`Reveal ${s.revealN} · clock paused, bets open · OVER ${fmt.format(s.poolUp ?? 0)} / UNDER ${fmt.format(s.poolDown ?? 0)} AURA`)
       break
     }
     case 'reveal_end': {
+      const rebet = num(msg.rebet, 0)
+      log(`Clock resumed after reveal ${num(msg.n, s.revealN)} · ${rebet} ${rebet === 1 ? 'player' : 'players'} bet during the pause`)
       s.revealN = 0
-      log('Reveal closed · bets locked again')
       break
     }
     case 'freeze': {
@@ -441,6 +476,7 @@ function handle(msg: Msg): void {
         count: s.count ?? 0,
         threshold: line,
         paid: num(msg.paid, 0),
+        bettors: optNum(msg.bettors),
         txHash: typeof msg.txHash === 'string' ? msg.txHash : null,
         settleMs: optNum(msg.settleMs),
       }
@@ -457,7 +493,12 @@ function handle(msg: Msg): void {
         totalMon: num(msg.totalMon, 0),
         txHash: typeof msg.txHash === 'string' ? msg.txHash : null,
       }
-      log(`Paid ${s.payout.winners} winners · ${s.payout.totalMon.toFixed(2)} MON`, 'ok')
+      log(
+        s.payout.txHash
+          ? `Paid ${s.payout.winners} winners · ${s.payout.totalMon.toFixed(2)} MON`
+          : 'No payout · nobody made a profit this game, so no transaction was sent',
+        'ok',
+      )
       break
     }
     case 'gas': {
@@ -510,7 +551,7 @@ function drawTopBar(): void {
 }
 
 function statusText(): { text: string; tone: '' | 'go' | 'live' | 'reveal' } {
-  if (s.payout) return { text: 'Winners paid in MON', tone: 'go' }
+  if (s.payout) return { text: s.payout.txHash ? 'Winners paid in MON' : 'Nothing to pay', tone: 'go' }
   switch (s.phase) {
     case 'idle':
       return { text: s.gameId === 0 ? 'Projector on the landing page' : 'Lobby · join QR on screen', tone: '' }
@@ -519,7 +560,7 @@ function statusText(): { text: string; tone: '' | 'go' | 'live' | 'reveal' } {
     case 'live':
       return { text: 'Live · bets locked', tone: 'live' }
     case 'reveal':
-      return { text: s.revealN ? `Reveal ${s.revealN} · 5 s to bet` : 'Reveal · 5 s to bet', tone: 'reveal' }
+      return { text: s.revealN ? `Reveal ${s.revealN} · clock paused` : 'Reveal · clock paused', tone: 'reveal' }
     case 'frozen':
       return { text: 'Clock stopped', tone: '' }
     case 'settling':
@@ -598,7 +639,8 @@ function drawOutcomes(): void {
     row.classList.toggle('winner', s.verdict !== null && (s.verdict.winner === 0) === (side === 'over'))
     row.classList.toggle('loser', s.verdict !== null && (s.verdict.winner === 0) !== (side === 'over'))
     $(`${side}Prob`).textContent = known && total > 0 ? `${Math.round((100 * pool) / total)}%` : hasRound && !known ? 'Hidden' : '—'
-    $(`${side}Mult`).textContent = known ? formatMult(mult) : '—'
+    // an empty pot has no odds: the regularised 2.00x would be a number that means nothing
+    $(`${side}Mult`).textContent = !known ? '—' : total === 0 ? 'No bets' : formatMult(mult)
     $(`${side}Pool`).textContent = known ? `${fmt.format(pool)} AURA` : '—'
     $(`${side}Sub`).textContent = bettors !== null && known ? `${fmt.format(bettors)} ${bettors === 1 ? 'player' : 'players'} on it` : fallback
   }
@@ -615,7 +657,11 @@ function drawVerdict(): void {
   const facts = $('verdictFacts')
   const tx = $<HTMLAnchorElement>('verdictTx')
   let hash: string | null = null
-  if (s.payout) {
+  if (s.payout && !s.payout.txHash) {
+    who.textContent = 'NO PAYOUT'
+    who.className = 'who paid'
+    facts.textContent = 'Nobody made a profit this game, so no transaction was sent.'
+  } else if (s.payout) {
     who.textContent = 'PAID'
     who.className = 'who paid'
     facts.innerHTML = `<b>${fmt.format(s.payout.winners)}</b> winners paid <b>${s.payout.totalMon.toFixed(2)} MON</b> in one transaction`
@@ -625,7 +671,8 @@ function drawVerdict(): void {
     who.textContent = v.winner === 0 ? 'OVER' : 'UNDER'
     who.className = `who ${v.winner === 0 ? 'over' : 'under'}`
     const settled = v.settleMs === null ? '' : ` · settled in <b>${fmt.format(v.settleMs)} ms</b>`
-    facts.innerHTML = `<b>${fmt.format(v.count)}</b> light-ups vs a line of <b>${v.threshold === null ? '?' : fmt.format(v.threshold)}</b> · <b>${fmt.format(v.paid)}</b> paid${settled}`
+    const outcome = v.bettors === 0 ? 'nobody had bet: nothing won or lost' : `<b>${fmt.format(v.paid)}</b> paid`
+    facts.innerHTML = `<b>${fmt.format(v.count)}</b> light-ups vs a line of <b>${v.threshold === null ? '?' : fmt.format(v.threshold)}</b> · ${outcome}${settled}`
     hash = v.txHash
   } else {
     box.hidden = true
@@ -717,13 +764,12 @@ function drawChart(): void {
       '</linearGradient></defs>',
   ]
 
-  // the two reveal windows, where the room gets five more seconds to bet
+  // the two reveals: the clock pauses there until the régie resumes it, so each is a moment on
+  // the clock rather than a stretch of it
   for (const n of [1, 2]) {
-    const at = (n * duration) / 3
-    const x0 = x(at)
-    const x1 = x(at + REVEAL_WINDOW_MS)
-    parts.push(`<rect x="${x0}" y="${top}" width="${Math.max(0, x1 - x0)}" height="${plotH}" fill="rgba(255,181,71,.07)"/>`)
-    parts.push(`<text class="rv" x="${x0 + 6}" y="${top + 14}">Reveal ${n}</text>`)
+    const rx = x((n * duration) / 3)
+    parts.push(`<line x1="${rx}" x2="${rx}" y1="${top}" y2="${top + plotH}" stroke="rgba(255,181,71,.55)" stroke-width="1.5" stroke-dasharray="3 4"/>`)
+    parts.push(`<text class="rv" x="${rx + 6}" y="${top + 14}">Reveal ${n} · pause</text>`)
   }
 
   const showLine = line !== null && s.manche > 0 && s.phase !== 'idle'

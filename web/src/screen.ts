@@ -14,9 +14,23 @@ const SHOW = 'SHOW YOUR SCREENS!'
 /** The round's own words for its phases; anything else falls back to phaseLabel(). */
 const PHASES: Record<string, string> = { open: 'Betting', live: 'Live', settling: 'Settling…' }
 
+const MANCHES = 2
+let manche = 0
+let explorer = ''
+
 function setManche(n: number): void {
-  $('manche').textContent = n > 0 ? `ROUND ${n}/2` : 'ROUND —/2'
+  manche = n
+  $('manche').textContent = n > 0 ? `ROUND ${n}/${MANCHES}` : `ROUND —/${MANCHES}`
 }
+
+/**
+ * While the clock runs the wall is the camera page: the room, every lit phone boxed, the count and
+ * the clock. It stays loaded underneath the rest of the game so it is warm when the clock starts.
+ */
+function setCamera(on: boolean): void {
+  $('cam').classList.toggle('on', on)
+}
+const CAMERA_PHASES = new Set(['live', 'frozen', 'settling'])
 let seq = -1
 let leaderboardHtml = ''
 
@@ -127,8 +141,11 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       // (betting happens before the clock, so an open round still shows the join QR)
       setStage(Number(msg.gameId ?? 0) === 0 ? 'lobby' : (manche === 0 && !round) || round?.phase === 'open' ? 'join' : 'game')
       renderLeaderboard(msg.leaderboard as Array<Record<string, unknown>>)
-      // a reload after the last manche lands straight on the podium
+      renderReceipts(msg.receipts)
+      setCamera(CAMERA_PHASES.has(String(round?.phase ?? '')))
+      // a reload after the last manche lands straight on the podium, between manches on the standings
       if (Array.isArray(msg.final)) showFinal(msg.final as Standing[], 0)
+      else if (round?.phase === 'resolved' && manche < MANCHES) showStandings(msg.leaderboard, 0)
       else hideFinal()
       break
     }
@@ -149,6 +166,8 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       renderLeaderboard((msg.leaderboard as Array<Record<string, unknown>> | undefined) ?? [])
       // gameId 0 is the régie sending everyone back to the landing page
       setStage(Number(msg.gameId ?? 1) === 0 ? 'lobby' : 'join')
+      setCamera(false)
+      renderReceipts([])
       hideFinal()
       hideFlash()
       break
@@ -162,6 +181,8 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       $('clock').textContent = 'BET'
       setHidden(true)
       setStage('join') // betting happens before the clock: late arrivals can still scan and bet
+      setCamera(false)
+      hideFinal() // the standings between manches give way to the next one
       hideFlash()
       break
     }
@@ -170,6 +191,7 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       $('liveCount').textContent = '0'
       $('liveThreshold').textContent = String(msg.threshold ?? '?')
       setStage('game')
+      setCamera(true)
       break
     }
     case 'tick': {
@@ -182,20 +204,24 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       if (msg.count !== undefined) $('liveCount').textContent = String(msg.count)
       if (msg.threshold !== undefined && msg.threshold !== null) $('liveThreshold').textContent = String(msg.threshold)
       if (msg.phase === 'live' || msg.phase === 'reveal') setStage('game')
+      setCamera(CAMERA_PHASES.has(String(msg.phase)))
       break
     }
     case 'threshold':
       $('liveThreshold').textContent = String(msg.threshold ?? '?')
       break
     case 'reveal': {
+      // the clock pauses here until the régie resumes it: the odds, and betting open again
+      setCamera(false)
       setHidden(false)
       showPools(msg)
-      $('phase').textContent = `Reveal ${String(msg.n ?? '')} — 5 s to bet`
-      $('question').textContent = `REVEAL ${String(msg.n ?? '')} — LAST CHANCE TO BET`
+      $('phase').textContent = `Reveal ${String(msg.n ?? '')} — clock paused`
+      $('question').textContent = `REVEAL ${String(msg.n ?? '')} · BETS ARE OPEN AGAIN`
       break
     }
     case 'reveal_end':
       $('question').textContent = SHOW
+      setCamera(true)
       break
     case 'freeze': {
       setHidden(false)
@@ -204,16 +230,25 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       break
     }
     case 'resolved': {
+      setCamera(false)
       const winner = Number(msg.winner) === 0 ? 'OVER' : 'UNDER'
       $('flashBig').textContent = winner
       $('flashBig').style.color = winner === 'OVER' ? 'var(--up)' : 'var(--down)'
       $('liveCount').textContent = String(msg.count ?? 0)
-      $('flashSub').textContent = `${String(msg.count ?? 0)} screens vs threshold ${String(msg.threshold ?? 0)} · ${String(msg.paid ?? 0)} paid in one transaction`
+      const versus = `${String(msg.count ?? 0)} light-ups vs a line of ${String(msg.threshold ?? 0)}`
+      // nobody bet: the count still lands, but nothing was won or lost, and no one was paid
+      $('flashSub').textContent =
+        Number(msg.bettors ?? -1) === 0
+          ? `${versus} · nobody had bet, so nothing was won or lost`
+          : `${versus} · ${String(msg.paid ?? 0)} paid in one transaction`
       // never render a hash or a settle time that did not happen
-      $('flashHash').textContent = msg.txHash ? `${String(msg.txHash)} · ${String(msg.settleMs ?? '?')} ms` : ''
+      setFlashHash(msg.txHash, msg.settleMs === undefined || msg.settleMs === null ? '' : ` · ${String(msg.settleMs)} ms`)
       $('flash').classList.add('on')
       renderLeaderboard(msg.leaderboard as Array<Record<string, unknown>>)
-      setTimeout(hideFlash, 9000)
+      renderReceipts(msg.receipts)
+      // between the two manches, the standings take the wall until the next one opens
+      if (manche < MANCHES) showStandings(msg.leaderboard, 9000)
+      else setTimeout(hideFlash, 9000)
       break
     }
     case 'joined': {
@@ -230,12 +265,20 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       break
     }
     case 'payout': {
-      $('flashBig').textContent = 'PAID'
-      $('flashBig').style.color = 'var(--magenta)'
-      $('flashSub').textContent = `${String(msg.winners ?? 0)} winners · ${Number(msg.totalMon ?? 0).toFixed(2)} MON · one transaction`
-      $('flashHash').textContent = String(msg.txHash ?? '')
+      renderReceipts(msg.receipts)
+      if (typeof msg.txHash === 'string') {
+        $('flashBig').textContent = 'PAID'
+        $('flashBig').style.color = 'var(--magenta)'
+        $('flashSub').textContent = `${String(msg.winners ?? 0)} winners · ${Number(msg.totalMon ?? 0).toFixed(2)} MON · one transaction`
+      } else {
+        // nothing was owed, so nothing was sent: say so, and show no hash
+        $('flashBig').textContent = 'NO PAYOUT'
+        $('flashBig').style.color = 'var(--magenta)'
+        $('flashSub').textContent = 'Nobody made a profit this game, so there was nothing to send'
+      }
+      setFlashHash(msg.txHash, '')
       $('flash').classList.add('on')
-      setTimeout(hideFlash, 8000) // back to the podium, which kept the scores from before the payout
+      setTimeout(hideFlash, 8000) // back to the podium, with every transaction of the game under it
       break
     }
     default:
@@ -263,6 +306,12 @@ function showPools(msg: Record<string, unknown>): void {
   const down = Number(msg.poolDown ?? 0)
   $('poolUp').textContent = String(up)
   $('poolDown').textContent = String(down)
+  // an empty pot has no odds: the regularised 2.00x would be a number that means nothing
+  if (up + down === 0) {
+    $('multUp').textContent = 'No bets'
+    $('multDown').textContent = 'No bets'
+    return
+  }
   const multUp = Number(msg.mult_up_x100 ?? msg.up ?? 0)
   const multDown = Number(msg.mult_down_x100 ?? msg.down ?? 0)
   $('multUp').textContent = formatMult(multUp)
@@ -319,10 +368,25 @@ function podiumCol(rank: 1 | 2 | 3, p: Standing | undefined): string {
     </div>`
 }
 
-function showFinal(rows: Standing[] | undefined, delayMs: number): void {
+const END_OF_GAME = { kicker: 'End of the game', title: 'AURA MAX LEADERBOARD' }
+
+/** Between the two manches: the same board, this game's players, until the next manche opens. */
+function showStandings(rows: unknown, delayMs: number): void {
+  if (!Array.isArray(rows)) return
+  const standings = (rows as Array<Record<string, unknown>>).slice(0, 10).map((row) => ({
+    name: String(row.name ?? ''),
+    avatar: Number(row.avatar ?? 0),
+    profit: Number(row.profit ?? 0),
+  }))
+  showFinal(standings, delayMs, { kicker: `After round ${manche} of ${MANCHES}`, title: 'STANDINGS' })
+}
+
+function showFinal(rows: Standing[] | undefined, delayMs: number, labels = END_OF_GAME): void {
   if (!rows) return
   if (finalTimer) clearTimeout(finalTimer)
   const render = (): void => {
+    $('finalKicker').textContent = labels.kicker
+    $('finalTitle').textContent = labels.title
     const [first, second, third, ...rest] = rows
     // classic podium order, left to right: 2nd, 1st, 3rd
     $('podium').innerHTML = podiumCol(2, second) + podiumCol(1, first) + podiumCol(3, third)
@@ -352,6 +416,51 @@ function hideFinal(): void {
 
 function hideFlash(): void {
   $('flash').classList.remove('on')
+}
+
+function shortHash(hash: string): string {
+  return `${hash.slice(0, 8)}…${hash.slice(-6)}`
+}
+
+/** Opens in a new tab, on the projector: a hash the room can watch being looked up. */
+function txLink(hash: string, text: string): HTMLAnchorElement {
+  const a = document.createElement('a')
+  a.textContent = text
+  a.target = '_blank'
+  a.rel = 'noopener'
+  if (explorer) a.href = `${explorer}/tx/${hash}`
+  return a
+}
+
+function setFlashHash(hash: unknown, suffix: string): void {
+  const box = $('flashHash')
+  box.replaceChildren()
+  if (typeof hash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(hash)) return
+  box.append(txLink(hash, `${hash} ↗`), document.createTextNode(suffix))
+}
+
+/** Every transaction of the game under the podium, each one a link to the explorer. */
+function renderReceipts(list: unknown): void {
+  const rows = Array.isArray(list)
+    ? (list as Array<{ label?: unknown; hash?: unknown }>).filter(
+        (r) => typeof r.hash === 'string' && /^0x[0-9a-fA-F]{64}$/.test(r.hash),
+      )
+    : []
+  const host = $('receiptList')
+  host.replaceChildren(
+    ...rows.map((r) => {
+      const hash = String(r.hash)
+      const a = txLink(hash, '')
+      const label = document.createElement('span')
+      label.textContent = String(r.label ?? '')
+      const short = document.createElement('span')
+      short.textContent = `${shortHash(hash)} ↗`
+      a.append(label, short)
+      return a
+    }),
+  )
+  $('receipts').classList.toggle('on', rows.length > 0)
+  $('final').classList.toggle('receipted', rows.length > 0)
 }
 
 
@@ -406,6 +515,13 @@ function renderRoster(rows: Array<{ address?: unknown; name?: unknown; avatar?: 
   }
   for (const row of rows) upsertRoster(String(row.address ?? ''), String(row.name ?? ''), Number(row.avatar ?? 0))
 }
+
+void fetch(api('/api/config'))
+  .then((response) => response.json() as Promise<{ explorer?: string }>)
+  .then((config) => {
+    explorer = (config.explorer ?? '').replace(/\/+$/, '')
+  })
+  .catch((error: unknown) => console.warn('no explorer link: could not load the chain config', error))
 
 connect()
 // the projector stays up all day: pick up each deploy, between rounds
