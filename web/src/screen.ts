@@ -161,6 +161,7 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       $('liveCount').textContent = '—'
       $('liveThreshold').textContent = '?'
       $('clock').textContent = '—'
+      clearPools() // last game's odds must not sit on the wall of the next one
       // a fresh game starts with an empty wall and an empty board (the server only carries in
       // whoever joined while the landing page was up)
       renderRoster(msg.roster as Array<{ address?: unknown; name?: unknown; avatar?: unknown }> | undefined)
@@ -180,7 +181,7 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       $('liveThreshold').textContent = '?'
       $('phase').textContent = 'Betting'
       $('clock').textContent = 'BET'
-      setHidden(true)
+      clearPools()
       setStage('join') // betting happens before the clock: late arrivals can still scan and bet
       setCamera(false)
       hideFinal() // the standings between manches give way to the next one
@@ -302,6 +303,15 @@ function applyRound(round: Record<string, unknown>): void {
 function showLine(value: unknown): void {
   if (value === null || value === undefined || !Number.isFinite(Number(value))) return
   $('liveThreshold').textContent = lineText(Number(value))
+}
+
+/** No round, or a round whose pools are still hidden: nothing from the last one stays behind. */
+function clearPools(): void {
+  $('poolUp').textContent = '0'
+  $('poolDown').textContent = '0'
+  $('multUp').textContent = '—'
+  $('multDown').textContent = '—'
+  setHidden(true)
 }
 
 function setHidden(hidden: boolean): void {
