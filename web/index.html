@@ -83,6 +83,13 @@
       .stakes button:nth-child(2) { background: #B34DFF; color: #fff; }
       .stakes button:nth-child(3) { background: #FF2E9E; }
       .stakes button:nth-child(4), .stakes button.go { background: var(--gold); }
+      .pending { display: none; flex-direction: column; gap: 10px; background: var(--surface); border: 1px dashed var(--magenta); border-radius: 16px; padding: 12px; }
+      .pending.on { display: flex; }
+      .pendingText { text-align: center; font-size: 15px; color: var(--text-dim); }
+      .pendingText b { color: var(--text); font-family: 'Anton', sans-serif; font-weight: 400; font-size: 20px; letter-spacing: .03em; }
+      .pendingBtns { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; }
+      .pendingBtns .undo { background: transparent; color: var(--text); border: 2px solid var(--border); box-shadow: none; padding: 14px; font-size: 16px; }
+      .pendingBtns .confirm { padding: 14px; font-size: 16px; }
 
       .status { text-align: center; font-size: 15px; min-height: 22px; color: var(--text-dim); }
       .tick { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; background: var(--text-faint); }
@@ -140,6 +147,14 @@
         <button data-stake="250">250</button>
         <button data-stake="500">500</button>
         <button data-stake="all" class="go">ALL IN</button>
+      </div>
+      <!-- chips pile up here first: nothing is sent, and nothing leaves the wallet, until CONFIRM -->
+      <div class="pending" id="pending">
+        <div class="pendingText" id="pendingText"></div>
+        <div class="pendingBtns">
+          <button type="button" class="undo" id="undoBtn">UNDO</button>
+          <button type="button" class="confirm" id="confirmBtn">CONFIRM</button>
+        </div>
       </div>
       <div class="status" id="status"><span class="tick" id="tick"></span><span id="statusText">Pick a side</span></div>
       <div class="spacer"></div>

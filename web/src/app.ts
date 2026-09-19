@@ -223,12 +223,54 @@ function setTick(stateName: 'idle' | 'pending' | 'seen' | 'final'): void {
   tick.className = `tick${stateName === 'seen' ? ' seen' : stateName === 'final' ? ' final' : ''}`
 }
 
+/**
+ * Chips go on a pending pile first. UNDO takes the last one back, CONFIRM signs and sends the pile
+ * as one bet. Only a confirmed bet leaves the wallet, and a confirmed bet is final: it is signed,
+ * the server has it, and the contract has no way to take it back.
+ */
+let pendingChips: number[] = []
+const pendingTotal = (): number => pendingChips.reduce((sum, chip) => sum + chip, 0)
+
+function clearPending(): void {
+  pendingChips = []
+  renderPending()
+}
+
+function renderPending(): void {
+  const total = pendingTotal()
+  const open = total > 0 && canBet() && selectedSide !== null
+  if (total > 0 && !open) pendingChips = [] // betting closed or no side: the pile is dropped, never sent
+  $('pending').classList.toggle('on', open)
+  if (!open) return
+  const side = selectedSide === 0 ? 'OVER' : 'UNDER'
+  $('pendingText').innerHTML = `Not placed yet: <b>${total} AURA</b> on <b>${side}</b>`
+  $('confirmBtn').textContent = `CONFIRM ${total}`
+}
+
 for (const button of document.querySelectorAll<HTMLButtonElement>('.stakes button')) {
   button.addEventListener('click', () => {
+    const room = 1000 - myStake - pendingTotal()
     const raw = button.dataset.stake
-    void placeBet(raw === 'all' ? 1000 - myStake : Number(raw))
+    const chip = Math.min(raw === 'all' ? room : Number(raw), room)
+    if (chip <= 0) return
+    pendingChips.push(chip)
+    if (navigator.vibrate) navigator.vibrate(10)
+    updateStatus()
   })
 }
+
+$('undoBtn').addEventListener('click', () => {
+  pendingChips.pop()
+  updateStatus()
+})
+
+$('confirmBtn').addEventListener('click', () => {
+  const total = pendingTotal()
+  if (total <= 0) return
+  pendingChips = []
+  void placeBet(total)
+  updateStatus()
+})
 
 $('sideUp').addEventListener('click', () => selectSide(0))
 $('sideDown').addEventListener('click', () => selectSide(1))
@@ -262,11 +304,14 @@ function updateStatus(): void {
   $('sideUp').classList.toggle('mine', myUp > 0)
   $('sideDown').classList.toggle('mine', myDown > 0)
 
+  // chips already on the pending pile are spoken for: only what is left after them can be added
+  const room = left - pendingTotal()
   for (const button of document.querySelectorAll<HTMLButtonElement>('.stakes button')) {
     const raw = button.dataset.stake
-    const value = raw === 'all' ? left : Number(raw)
-    button.disabled = selectedSide === null || value <= 0 || value > left || !canBet()
+    const value = raw === 'all' ? room : Number(raw)
+    button.disabled = selectedSide === null || value <= 0 || value > room || !canBet()
   }
+  renderPending()
 }
 
 function canBet(): boolean {
@@ -383,6 +428,7 @@ function handle(msg: Record<string, unknown>): void {
     }
     case 'open': {
       shownPhase = ''
+      clearPending() // a new manche starts with nothing on the pile
       $('finalRank').classList.remove('on')
       round = {
         id: Number(msg.roundId),
