@@ -324,13 +324,6 @@ function renderRoster(rows: Array<{ name?: unknown; avatar?: unknown }> | undefi
   for (const row of rows) addToRoster(String(row.name ?? ''), Number(row.avatar ?? 0))
 }
 
-void fetch(api('/api/config'))
-  .then((r) => r.json())
-  .then((config: { contract: string }) => {
-    $('contract').textContent = config.contract
-  })
-  .catch(() => undefined)
-
 connect()
 
 export {}
