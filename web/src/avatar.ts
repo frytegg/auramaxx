@@ -28,13 +28,21 @@ const KNEE_R: Pivot = [123, 256]
 
 type Pivot = readonly [number, number]
 
-const SKIN = '#F0BC92'
-const SKIN_DARK = '#D2966D'
-const SUIT = '#3E1F74'
-const SUIT_DARK = '#2A1450'
+const SKIN = '#F0B08A'
+const SKIN_DARK = '#CE8F68'
+/** The ruddy complexion is half the likeness; without it the face reads as a generic cartoon. */
+const BLUSH = '#E08A72'
+const HAIR = '#E6E3E9'
+const HAIR_LINE = '#C3BDCB'
+const BROW = '#BDB7C4'
+/** Dark rectangular frames. Of everything on this face, this is what a room recognises first. */
+const FRAME = '#2B211E'
+const SUIT = '#2E4D80'
+const SUIT_DARK = '#20375C'
 /** Sleeves are deliberately a shade off the jacket. Matched exactly, the arms vanish into the
  *  chest and the character reads as a man with no arms waving two floating hands. */
-const SLEEVE = '#5A2CA6'
+const SLEEVE = '#3C639F'
+const TIE = '#1C2A47'
 const SHIRT = '#F8F3F7'
 const MAGENTA = '#FF2E9E'
 const INK = '#0B0710'
@@ -87,7 +95,11 @@ function markup(): string {
           <!-- jacket: shoulders wider than hips, the cheapest way to read as a suit -->
           <path d="M 76,140 Q 76,120 98,117 L 122,117 Q 144,120 144,140 L 140,204 L 80,204 Z" fill="${SUIT}" ${LINE} />
           <path d="M 98,117 L 110,158 L 122,117 Z" fill="${SHIRT}" />
-          <path d="M 110,126 L 118,140 L 110,182 L 102,140 Z" fill="${MAGENTA}" />
+          <path d="M 110,126 L 118,140 L 110,182 L 102,140 Z" fill="${TIE}" stroke="#08060E" stroke-width="2" />
+          <circle cx="110" cy="148" r="2.3" fill="${MAGENTA}" />
+          <circle cx="110" cy="160" r="2.3" fill="${MAGENTA}" />
+          <circle cx="110" cy="172" r="2" fill="${MAGENTA}" />
+          <circle cx="99" cy="147" r="3.4" fill="${MAGENTA}" stroke="#08060E" stroke-width="1.6" />
           <path d="M 98,117 L 110,158 L 96,150 Z" fill="${SUIT_DARK}" />
           <path d="M 122,117 L 110,158 L 124,150 Z" fill="${SUIT_DARK}" />
 
@@ -109,16 +121,42 @@ function markup(): string {
           </g>
 
           <g id="ax-head">
-            <ellipse cx="72" cy="80" rx="6" ry="10" fill="${SKIN_DARK}" ${LINE} />
-            <ellipse cx="148" cy="80" rx="6" ry="10" fill="${SKIN_DARK}" ${LINE} />
-            <ellipse cx="${NECK[0]}" cy="74" rx="39" ry="42" fill="${SKIN}" ${LINE} />
-            <!-- swept-back hair -->
-            <path d="M 72,60 Q 78,28 110,28 Q 142,28 148,60 Q 136,44 110,44 Q 84,44 72,60 Z" fill="#E7E4EA" ${LINE} />
-            <!-- sunglasses: the aura-farming uniform, and they read from the back of the room -->
-            <rect x="76" y="66" width="30" height="20" rx="7" fill="${INK}" ${LINE} />
-            <rect x="114" y="66" width="30" height="20" rx="7" fill="${INK}" ${LINE} />
-            <rect x="104" y="73" width="12" height="5" fill="${INK}" />
-            <path d="M 94,100 Q 110,116 126,100 Q 110,108 94,100 Z" fill="${INK}" ${LINE} />
+            <!-- ears sit outside the face outline, otherwise the head reads as a helmet -->
+            <ellipse cx="70" cy="83" rx="6.5" ry="10" fill="${SKIN}" ${LINE} />
+            <ellipse cx="150" cy="83" rx="6.5" ry="10" fill="${SKIN}" ${LINE} />
+            <ellipse cx="${NECK[0]}" cy="74" rx="39" ry="43" fill="${SKIN}" ${LINE} />
+            <ellipse cx="86" cy="96" rx="12" ry="8" fill="${BLUSH}" opacity=".5" />
+            <ellipse cx="134" cy="96" rx="12" ry="8" fill="${BLUSH}" opacity=".5" />
+
+            <!-- Silver hair swept back. The hairline has to sit HIGH and pull back at the temples:
+                 brought low and even, the same shape reads as a swimming cap, which is exactly what
+                 the first attempt looked like. The two strand lines do the rest of the work. -->
+            <path d="M 70,64 Q 63,26 107,21 Q 150,24 150,64 Q 147,48 139,43 Q 126,35 110,41 Q 94,36 81,45 Q 73,51 70,64 Z" fill="${HAIR}" ${LINE} />
+            <path d="M 80,42 Q 101,30 124,33" fill="none" stroke="${HAIR_LINE}" stroke-width="2.6" stroke-linecap="round" />
+            <path d="M 85,50 Q 105,39 131,41" fill="none" stroke="${HAIR_LINE}" stroke-width="2.6" stroke-linecap="round" />
+
+            <!-- brows clear the frames; tucked behind them they read as a second pair of glasses -->
+            <path d="M 80,55 Q 92,49 104,54" fill="none" stroke="${BROW}" stroke-width="5" stroke-linecap="round" />
+            <path d="M 116,54 Q 128,49 140,55" fill="none" stroke="${BROW}" stroke-width="5" stroke-linecap="round" />
+
+            <ellipse cx="92" cy="75" rx="4.5" ry="5.5" fill="${INK}" />
+            <ellipse cx="128" cy="75" rx="4.5" ry="5.5" fill="${INK}" />
+            <circle cx="93.6" cy="73" r="1.7" fill="#FFFFFF" />
+            <circle cx="129.6" cy="73" r="1.7" fill="#FFFFFF" />
+
+            <!-- big squarish frames over the eyes: the one feature a room recognises instantly -->
+            <rect x="74" y="63" width="34" height="25" rx="4" fill="#F2F7FB" fill-opacity=".14" stroke="${FRAME}" stroke-width="4.5" />
+            <rect x="112" y="63" width="34" height="25" rx="4" fill="#F2F7FB" fill-opacity=".14" stroke="${FRAME}" stroke-width="4.5" />
+            <path d="M 108,70 L 112,70" stroke="${FRAME}" stroke-width="4.5" stroke-linecap="round" />
+            <path d="M 74,69 L 68,72" stroke="${FRAME}" stroke-width="4" stroke-linecap="round" />
+            <path d="M 146,69 L 152,72" stroke="${FRAME}" stroke-width="4" stroke-linecap="round" />
+
+            <!-- a rounded tip, not a hooked line: the thin stroke version read as a scar -->
+            <ellipse cx="110" cy="95" rx="7.5" ry="6" fill="${SKIN}" />
+            <path d="M 103.5,95 Q 110,101 116.5,95" fill="none" stroke="${SKIN_DARK}" stroke-width="3" stroke-linecap="round" />
+
+            <path d="M 89,104 Q 110,122 131,104 Q 110,111 89,104 Z" fill="#8C3A3A" stroke="#08060E" stroke-width="2.5" stroke-linejoin="round" />
+            <path d="M 93,105 Q 110,111 127,105 Q 110,108 93,105 Z" fill="#FFF8F2" />
           </g>
         </g>
 
