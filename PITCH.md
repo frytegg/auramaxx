@@ -120,9 +120,24 @@ to be detected; a face needs forty to be recognised."
 
 Fill these in as they happen. Nothing goes on stage unfilled.
 
+**Measured live at 11:50, on the venue network — these are usable on stage:**
+
+- [x] `eth_sendRawTransactionSync` round trip: **421 / 474 / 619 ms** over three calls. The docs
+      say ~25 ms; that is a colocated figure. **Quote 474 ms, not 25.**
+- [x] **Charge-on-limit proved in production:** a call with a 60,000 gas limit reported
+      `gasUsed = 60,000` exactly, and the relayer's balance fell by **0.00648 MON** per call —
+      108 gwei effective (100 base + 8 priority) × the limit, not the usage.
+- [x] Relayer runway: **29.95 MON ≈ 4,600 transactions** of that size.
+- [x] Pipeline proven end to end first: `Ping` deployed at
+      `0xd817D35362350B2BdD420F241E50484CB3412e6E` and submitted to Sourcify before anything
+      depended on it.
+
+*Say it as:* "Gas on Monad is charged on the limit you ask for, not what you burn. We measured it
+this morning — 60,000 requested, 60,000 charged — so every gas limit in this build is hardcoded
+from a real receipt instead of an estimate."
+
 - [ ] Contract address + Sourcify verification link: «…»
-- [ ] Measured `eth_sendRawTransactionSync` round trip **on the venue network**: «…» ms
-- [ ] Charged gas for `betBatch` with n bets (balance delta, not `estimateGas`): «…»
+- [ ] Charged gas for `commitBatch` with n entries (balance delta, not `estimateGas`): «…»
 - [ ] Biggest resolve of the night: «N» paid, «G» gas, «X» ms, tx `«0x…»`
 - [ ] Total rounds and total bets by demo time: «…»
 - [ ] Camera count vs backend tally in the final round: «C» vs «S»
