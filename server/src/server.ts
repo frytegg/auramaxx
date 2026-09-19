@@ -57,7 +57,10 @@ onBroadcast(broadcast)
 
 function sendTo(socket: Socket, event: unknown): void {
   try {
-    socket.send(JSON.stringify({ ...(event as object), seq: ++seq }))
+    // a direct reply carries the current broadcast seq WITHOUT consuming one: seq tracks the
+    // broadcast stream only, otherwise every private message looks like a gap to every other
+    // client, they all resync, and each resync reply triggers the next storm
+    socket.send(JSON.stringify({ ...(event as object), seq }))
   } catch {
     /* the socket will be cleaned up on close */
   }
