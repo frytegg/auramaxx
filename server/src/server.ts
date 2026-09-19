@@ -15,6 +15,7 @@ import {
   freezeNow,
   join,
   leaderboard,
+  newGame,
   onBroadcast,
   openRound,
   payout,
@@ -174,6 +175,12 @@ app.register(async (scope) => {
 function guard(request: { query: unknown }): boolean {
   return (request.query as { k?: string } | undefined)?.k === env.OP_KEY
 }
+
+/** "Start a game" on the projector: opens the lobby the join QR belongs to. Costs no gas. */
+app.post('/op/game', async (request, reply) => {
+  if (!guard(request)) return reply.code(403).send({ error: 'nope' })
+  return { ok: true, ...newGame() }
+})
 
 app.post('/op/open', async (request, reply) => {
   if (!guard(request)) return reply.code(403).send({ error: 'nope' })

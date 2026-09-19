@@ -6,20 +6,69 @@ import { JOIN_URL, WS_URL, api } from './api.js'
 
 const $ = (id: string): HTMLElement => document.getElementById(id)!
 
-const QUESTION = 'COMBIEN VONT S’ALLUMER ?'
+const QUESTION = 'HOW MANY WILL LIGHT UP?'
 
 function setManche(n: number): void {
-  $('manche').textContent = n > 0 ? `MANCHE ${n}/2` : 'MANCHE —/2'
+  $('manche').textContent = n > 0 ? `ROUND ${n}/2` : 'ROUND —/2'
 }
 let seq = -1
 let leaderboardHtml = ''
+
+// --- the three stages: landing page, join QR, live game ----------------------------------
+
+type Stage = 'lobby' | 'join' | 'game'
+
+/**
+ * Starting a game is an operator action, so this page needs the régie key the same way the régie
+ * does: from ?k= in the URL, remembered afterwards. Without it the button still renders, and says
+ * what is missing rather than failing silently.
+ */
+const opKey = new URLSearchParams(location.search).get('k') ?? localStorage.getItem('auramaxx.opkey') ?? ''
+if (opKey) localStorage.setItem('auramaxx.opkey', opKey)
+
+function setStage(stage: Stage): void {
+  $('lobby').classList.toggle('off', stage !== 'lobby')
+  $('join').classList.toggle('off', stage !== 'join')
+}
+
+function note(text: string, error = false): void {
+  $('startNote').textContent = text
+  $('startNote').classList.toggle('err', error)
+}
+
+const startBtn = $('startBtn') as HTMLButtonElement
+
+startBtn.addEventListener('click', () => void startGame())
+
+/** The server opens the lobby; the resulting broadcast is what moves this page on. */
+async function startGame(): Promise<void> {
+  if (!opKey) return note('Operator key missing — open this page with ?k=…', true)
+  startBtn.disabled = true
+  const previous = $('startNote').textContent ?? ''
+  note('Starting…')
+  try {
+    const response = await fetch(api(`/op/game?k=${encodeURIComponent(opKey)}`), { method: 'POST' })
+    if (response.status === 403) return note('Operator key refused', true)
+    if (!response.ok) return note(`Server error ${response.status}`, true)
+    note(previous)
+  } catch (error: unknown) {
+    note(`Could not reach the server: ${String(error)}`, true)
+  } finally {
+    startBtn.disabled = false
+  }
+}
+
+/** Phases arrive lowercase from the server; the screen is projected, so give them a capital. */
+function phaseLabel(phase: string): string {
+  return phase.charAt(0).toUpperCase() + phase.slice(1)
+}
 
 function connect(): void {
   const url = WS_URL
   const socket = new WebSocket(url)
 
   socket.addEventListener('open', () => {
-    $('phase').textContent = 'connected'
+    $('phase').textContent = 'Connected'
   })
 
   socket.addEventListener('message', (event) => {
@@ -33,7 +82,7 @@ function connect(): void {
   })
 
   socket.addEventListener('close', () => {
-    $('phase').textContent = 'reconnecting…'
+    $('phase').textContent = 'Reconnecting…'
     setTimeout(connect, 800 + Math.random() * 600)
   })
   socket.addEventListener('error', () => socket.close())
@@ -42,11 +91,25 @@ function connect(): void {
 function handle(msg: Record<string, unknown>, socket: WebSocket): void {
   switch (msg.type) {
     case 'snapshot': {
-      setManche(Number(msg.manche ?? 0))
+      const manche = Number(msg.manche ?? 0)
+      setManche(manche)
       const round = msg.round as Record<string, unknown> | null
       if (round) applyRound(round)
-      $('players').textContent = String(msg.players ?? 0)
+      setPlayers(Number(msg.players ?? 0))
+      // a reload must land back on the stage the game is actually in, not on the landing page
+      setStage(Number(msg.gameId ?? 0) === 0 ? 'lobby' : manche === 0 && !round ? 'join' : 'game')
       renderLeaderboard(msg.leaderboard as Array<Record<string, unknown>>)
+      break
+    }
+    case 'game': {
+      setManche(0)
+      setPlayers(Number(msg.players ?? 0))
+      $('question').textContent = 'Waiting for the round'
+      $('liveCount').textContent = '—'
+      $('liveThreshold').textContent = '?'
+      $('clock').textContent = '—'
+      setStage('join')
+      hideFlash()
       break
     }
     case 'open': {
@@ -54,9 +117,9 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       $('question').textContent = QUESTION
       $('liveCount').textContent = '—'
       $('liveThreshold').textContent = '?'
-      $('phase').textContent = 'open'
+      $('phase').textContent = 'Open'
       setHidden(true)
-      setJoinVisible(false)
+      setStage('game')
       hideFlash()
       break
     }
@@ -64,7 +127,7 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       const remaining = Number(msg.remainingMs ?? 0)
       $('clock').textContent = (remaining / 1000).toFixed(1)
       $('clock').classList.toggle('paused', msg.phase === 'reveal')
-      $('phase').textContent = String(msg.phase ?? '')
+      $('phase').textContent = phaseLabel(String(msg.phase ?? ''))
       if (msg.hidden === false) showPools(msg)
       if (msg.count !== undefined) $('liveCount').textContent = String(msg.count)
       break
@@ -75,7 +138,7 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
     case 'reveal': {
       setHidden(false)
       showPools(msg)
-      $('phase').textContent = `reveal ${String(msg.n ?? '')}`
+      $('phase').textContent = `Reveal ${String(msg.n ?? '')}`
       break
     }
     case 'resume':
@@ -84,7 +147,7 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
     case 'freeze': {
       setHidden(false)
       showPools(msg)
-      $('phase').textContent = 'frozen'
+      $('phase').textContent = 'Frozen'
       break
     }
     case 'resolved': {
@@ -92,7 +155,7 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       $('flashBig').textContent = winner
       $('flashBig').style.color = winner === 'OVER' ? 'var(--up)' : 'var(--down)'
       $('liveCount').textContent = String(msg.count ?? 0)
-      $('flashSub').textContent = `${String(msg.count ?? 0)} écrans vs seuil ${String(msg.threshold ?? 0)} · ${String(msg.paid ?? 0)} payés en 1 transaction`
+      $('flashSub').textContent = `${String(msg.count ?? 0)} screens vs threshold ${String(msg.threshold ?? 0)} · ${String(msg.paid ?? 0)} paid in one transaction`
       // never render a hash or a settle time that did not happen
       $('flashHash').textContent = msg.txHash ? `${String(msg.txHash)} · ${String(msg.settleMs ?? '?')} ms` : ''
       $('flash').classList.add('on')
@@ -101,7 +164,7 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       break
     }
     case 'joined': {
-      $('players').textContent = String(msg.total ?? 0)
+      setPlayers(Number(msg.total ?? 0))
       break
     }
     case 'gas': {
@@ -109,7 +172,7 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       break
     }
     case 'idle_qr': {
-      setJoinVisible(true)
+      setStage('join')
       break
     }
     case 'payout': {
@@ -130,7 +193,7 @@ function applyRound(round: Record<string, unknown>): void {
   $('question').textContent = QUESTION
   if (round.threshold !== null && round.threshold !== undefined) $('liveThreshold').textContent = String(round.threshold)
   if (round.count !== undefined) $('liveCount').textContent = String(round.count)
-  $('phase').textContent = String(round.phase ?? '')
+  $('phase').textContent = phaseLabel(String(round.phase ?? ''))
   setHidden(round.hidden !== false)
   if (round.hidden === false) showPools(round)
 }
@@ -181,12 +244,14 @@ function hideFlash(): void {
 }
 
 
-// the join QR covers the live count until a round opens, then gets out of the way
+// the join QR covers the live count between "Start a game" and the first round
 const qr = $('qr') as HTMLImageElement
 qr.src = api(`/api/qr.svg?url=${encodeURIComponent(JOIN_URL)}`)
 
-function setJoinVisible(visible: boolean): void {
-  $('join').classList.toggle('off', !visible)
+/** Two places show the count: the header all game long, and the join screen while people arrive. */
+function setPlayers(total: number): void {
+  $('players').textContent = String(total)
+  $('joinPlayers').textContent = String(total)
 }
 
 void fetch(api('/api/config'))
