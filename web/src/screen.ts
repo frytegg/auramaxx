@@ -7,6 +7,9 @@ import { JOIN_URL, WS_URL, api } from './api.js'
 const $ = (id: string): HTMLElement => document.getElementById(id)!
 
 const QUESTION = 'HOW MANY WILL LIGHT UP?'
+const SHOW = 'SHOW YOUR SCREENS!'
+/** The round's own words for its phases; anything else falls back to phaseLabel(). */
+const PHASES: Record<string, string> = { open: 'Betting', live: 'Live', settling: 'Settling…' }
 
 function setManche(n: number): void {
   $('manche').textContent = n > 0 ? `ROUND ${n}/2` : 'ROUND —/2'
@@ -97,7 +100,8 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       if (round) applyRound(round)
       setPlayers(Number(msg.players ?? 0))
       // a reload must land back on the stage the game is actually in, not on the landing page
-      setStage(Number(msg.gameId ?? 0) === 0 ? 'lobby' : manche === 0 && !round ? 'join' : 'game')
+      // (betting happens before the clock, so an open round still shows the join QR)
+      setStage(Number(msg.gameId ?? 0) === 0 ? 'lobby' : (manche === 0 && !round) || round?.phase === 'open' ? 'join' : 'game')
       renderLeaderboard(msg.leaderboard as Array<Record<string, unknown>>)
       break
     }
@@ -117,19 +121,30 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
       $('question').textContent = QUESTION
       $('liveCount').textContent = '—'
       $('liveThreshold').textContent = '?'
-      $('phase').textContent = 'Open'
+      $('phase').textContent = 'Betting'
+      $('clock').textContent = 'BET'
       setHidden(true)
-      setStage('game')
+      setStage('join') // betting happens before the clock: late arrivals can still scan and bet
       hideFlash()
+      break
+    }
+    case 'start': {
+      $('question').textContent = SHOW
+      $('liveCount').textContent = '0'
+      $('liveThreshold').textContent = String(msg.threshold ?? '?')
+      setStage('game')
       break
     }
     case 'tick': {
       const remaining = Number(msg.remainingMs ?? 0)
-      $('clock').textContent = (remaining / 1000).toFixed(1)
-      $('clock').classList.toggle('paused', msg.phase === 'reveal')
-      $('phase').textContent = phaseLabel(String(msg.phase ?? ''))
+      if (msg.phase !== 'open') $('clock').textContent = (remaining / 1000).toFixed(1)
+      $('clock').classList.toggle('paused', msg.phase === 'reveal' || msg.phase === 'open')
+      $('phase').textContent = PHASES[String(msg.phase)] ?? phaseLabel(String(msg.phase ?? ''))
       if (msg.hidden === false) showPools(msg)
+      else setHidden(true)
       if (msg.count !== undefined) $('liveCount').textContent = String(msg.count)
+      if (msg.threshold !== undefined && msg.threshold !== null) $('liveThreshold').textContent = String(msg.threshold)
+      if (msg.phase === 'live' || msg.phase === 'reveal') setStage('game')
       break
     }
     case 'threshold':
@@ -138,11 +153,12 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
     case 'reveal': {
       setHidden(false)
       showPools(msg)
-      $('phase').textContent = `Reveal ${String(msg.n ?? '')}`
+      $('phase').textContent = `Reveal ${String(msg.n ?? '')} — 5 s to bet`
+      $('question').textContent = `REVEAL ${String(msg.n ?? '')} — LAST CHANCE TO BET`
       break
     }
-    case 'resume':
-      setHidden(true)
+    case 'reveal_end':
+      $('question').textContent = SHOW
       break
     case 'freeze': {
       setHidden(false)

@@ -71,19 +71,20 @@
             <div class="pool up"><div class="s">OVER</div><div class="n" id="poolUp">caché</div></div>
             <div class="pool down"><div class="s">UNDER</div><div class="n" id="poolDown">caché</div></div>
           </div>
-          <span class="label">Lancer</span>
+          <span class="label">Avant le chrono</span>
           <div class="row">
-            <button class="btn" data-op="open" id="openBtn">1 · Lancer la manche 1 (45s)</button>
+            <button class="btn" data-op="open" id="openBtn">1 · Ouvrir les paris — manche 1</button>
+            <button class="btn" data-op="start">2 · Lancer le chrono (45 s)</button>
           </div>
-          <span class="label">Pendant le round</span>
+          <span style="font-size:12px; color:var(--text-faint)">Pendant les 45 s tout est automatique : magenta, reveals à 15 s et 30 s (5 s de paris), fin et résolution à 45 s.</span>
+          <span class="label">Secours</span>
           <div class="row">
-            <button class="btn" data-op="resume">2 · Reprendre après un reveal</button>
-            <button class="btn" data-op="freeze">3 · Freeze maintenant</button>
+            <button class="btn" data-op="freeze">Arrêter le chrono maintenant</button>
+            <button class="btn" data-op="settle">Résoudre (si l'auto a échoué)</button>
           </div>
-          <span class="label">Après le round</span>
+          <span class="label">Fin du jeu</span>
           <div class="row">
-            <button class="btn" data-op="settle">4 · Résoudre &amp; payer les AURA</button>
-            <button class="btn" data-op="payout">5 · Payer tout le monde en MON</button>
+            <button class="btn" data-op="payout">3 · Payer tout le monde en MON</button>
           </div>
         </section>
 
