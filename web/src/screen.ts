@@ -58,6 +58,7 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
         Number(msg.kind) === 0 ? 'BITCOIN — UP or DOWN?' : 'HOW MANY OF YOU WILL LIGHT UP?'
       $('phase').textContent = 'open'
       setHidden(true)
+      setJoinVisible(false)
       hideFlash()
       break
     }
@@ -107,6 +108,10 @@ function handle(msg: Record<string, unknown>, socket: WebSocket): void {
     }
     case 'gas': {
       $('gas').textContent = `gas spent ${Number(msg.spent ?? 0).toFixed(4)} MON · relayer ${Number(msg.balance ?? 0).toFixed(2)} MON`
+      break
+    }
+    case 'idle_qr': {
+      setJoinVisible(true)
       break
     }
     case 'payout': {
@@ -179,6 +184,14 @@ function hideFlash(): void {
 function loop(): void {
   chart.draw()
   requestAnimationFrame(loop)
+}
+
+// the join QR covers the chart until a round opens, then gets out of the way
+const qr = $('qr') as HTMLImageElement
+qr.src = `/api/qr.svg?url=${encodeURIComponent(location.origin + '/')}`
+
+function setJoinVisible(visible: boolean): void {
+  $('join').classList.toggle('off', !visible)
 }
 
 void fetch('/api/config')

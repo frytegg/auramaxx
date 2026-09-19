@@ -4,6 +4,7 @@ import Fastify from 'fastify'
 import websocket from '@fastify/websocket'
 import fastifyStatic from '@fastify/static'
 import type { Address, Hex } from 'viem'
+import QRCode from 'qrcode'
 import { env } from './env.js'
 import { log } from './log.js'
 import { contract } from './chain.js'
@@ -75,6 +76,19 @@ app.get('/api/config', async () => ({
 }))
 
 app.get('/api/leaderboard', async () => ({ leaderboard: leaderboard() }))
+
+/** The join QR for the projector. Rendered server-side so the screen page stays dependency-free. */
+app.get('/api/qr.svg', async (request, reply) => {
+  const query = request.query as { url?: string }
+  const target = query.url ?? `${request.protocol}://${request.host}/`
+  const svg = await QRCode.toString(target, {
+    type: 'svg',
+    margin: 1,
+    errorCorrectionLevel: 'M',
+    color: { dark: '#07070d', light: '#ffffff' },
+  })
+  return reply.type('image/svg+xml').send(svg)
+})
 
 app.register(async (scope) => {
   scope.get('/ws', { websocket: true }, (socket) => {
