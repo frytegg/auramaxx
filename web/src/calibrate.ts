@@ -12,6 +12,7 @@
  */
 import { DEFAULTS, GRID_H, GRID_W, MagentaDetector, type Options } from './detect.js'
 import { linkCamera, type LinkState } from './camera-link.js'
+import { reloadOnNewBuild } from './build-watch.js'
 
 function $<T extends HTMLElement = HTMLElement>(id: string): T {
   const element = document.getElementById(id)
@@ -504,6 +505,8 @@ void startCamera(0).catch((e: unknown) => {
   noCamera('The camera did not start', 'Press S for details, then C to try again.')
 })
 requestAnimationFrame(draw)
+// on the wall all day: pick up each deploy, between rounds (settings and count survive a reload)
+reloadOnNewBuild()
 
 // handy in the console while calibrating
 ;(window as unknown as { detector: MagentaDetector }).detector = detector

@@ -9,6 +9,7 @@
  */
 import { avatarHtml } from './avatars.js'
 import { WS_URL, api } from './api.js'
+import { reloadOnNewBuild } from './build-watch.js'
 
 function $<T extends HTMLElement = HTMLElement>(id: string): T {
   const element = document.getElementById(id)
@@ -894,5 +895,6 @@ void fetch(api('/api/config'))
 
 render()
 connect()
+reloadOnNewBuild()
 
 export {}

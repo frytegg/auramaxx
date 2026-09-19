@@ -5,6 +5,7 @@
 import { JOIN_URL, WS_URL, api } from './api.js'
 import { mountMascot } from './avatar.js'
 import { avatarHtml, avatarImg } from './avatars.js'
+import { reloadOnNewBuild } from './build-watch.js'
 
 const $ = (id: string): HTMLElement => document.getElementById(id)!
 
@@ -407,5 +408,7 @@ function renderRoster(rows: Array<{ address?: unknown; name?: unknown; avatar?: 
 }
 
 connect()
+// the projector stays up all day: pick up each deploy, between rounds
+reloadOnNewBuild()
 
 export {}

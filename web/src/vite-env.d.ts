@@ -8,3 +8,6 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv
 }
+
+/** Set by vite.config.ts: the id of the build this page came from, also published as /build.json. */
+declare const __BUILD_ID__: string
