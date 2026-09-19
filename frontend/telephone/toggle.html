@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aura Max — Round en cours</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="screen-phone">
+  <div style="display: flex; justify-content: space-between; align-items: center; padding: 24px 24px 0;">
+    <span class="wordmark" style="font-size: 16px;">AURA</span>
+    <span class="font-display" data-role="time" style="font-size: 20px; color: var(--text);">30s</span>
+  </div>
+  <div style="padding: 10px 24px 0;">
+    <div style="height: 4px; border-radius: 999px; background: var(--surface-2); overflow: hidden;">
+      <div data-role="progress" style="height: 100%; width: 0%; background: var(--magenta); border-radius: 999px; transition: width 1s linear;"></div>
+    </div>
+  </div>
+  <div id="round-toggle" style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 20px; padding: 28px;">
+    <span style="font-size: 13px; letter-spacing: 2px; color: var(--text-dim); text-transform: uppercase;">Ton camp</span>
+    <div style="display: flex; flex-direction: column; gap: 16px; width: 100%;">
+      <button type="button" class="toggle-btn" data-camp="up">UP</button>
+      <button type="button" class="toggle-btn" data-camp="down">DOWN</button>
+    </div>
+    <span data-role="cooldown" style="font-size: 13px; color: var(--text-faint);"></span>
+  </div>
+  <div style="padding: 0 28px 36px; display: flex; justify-content: center;">
+    <span class="balance-chip">Mise&nbsp;: 200 $AURA</span>
+  </div>
+</div>
+
+<script type="module">
+  import { createRoundToggle } from '../assets/round-timer.js';
+
+  let initialCamp = 'down';
+  try { initialCamp = sessionStorage.getItem('auraMax.round.camp') || 'down'; } catch (e) {}
+
+  // >>> INTEGRATION POINT <<<
+  // `initialTimeLeft`/`roundLength` are hardcoded to a fresh 30s round here.
+  // In production, replace this local timer with the server-synced round
+  // clock (see assets/round-timer.js header) so this phone, the projector
+  // (projo/ambiant.html, projo/reveal.html) and the operator panel
+  // (operateur/index.html) all count down in lockstep, and so this screen
+  // auto-navigates to reveal.html / resultat.html on the operator's cues
+  // instead of sitting still.
+  createRoundToggle(document.getElementById('round-toggle'), {
+    initialCamp,
+    initialTimeLeft: 30,
+    roundLength: 30,
+    cooldownSeconds: 4,
+    onCampChange: (camp) => {
+      try { sessionStorage.setItem('auraMax.round.camp', camp); } catch (e) {}
+    },
+  });
+</script>
+</body>
+</html>

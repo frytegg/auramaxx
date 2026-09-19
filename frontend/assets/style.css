@@ -1,0 +1,162 @@
+/* Aura Max — shared design tokens & base styles
+   Magenta-only palette, Anton for display/numbers, Space Grotesk for body text. */
+
+:root {
+  --bg: #0B0710;
+  --surface: #17101D;
+  --surface-2: #20142A;
+  --border: #2C1E34;
+  --magenta: #FF2E9E;
+  --magenta-soft: #FF8FD4;
+  --violet: #B34DFF;
+  --indigo: #2B0F52;
+  --gold: #FFD166;
+  --gold-2: #FFB020;
+  --green: #35E28C;
+  --red: #FF4D6A;
+  --text: #F8F3F7;
+  --text-dim: #AE9AB2;
+  --text-faint: #7A6A7E;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  color: var(--text);
+}
+
+a { color: inherit; text-decoration: none; }
+button { font-family: 'Space Grotesk', sans-serif; }
+input::placeholder { color: var(--text-faint); }
+
+.font-display { font-family: 'Anton', sans-serif; font-weight: 400; }
+
+/* Screen frames — match the three device targets from the design brief */
+.screen-phone {
+  width: 390px;
+  height: 844px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  margin: 0 auto;
+}
+.screen-wide {
+  width: 1600px;
+  height: 900px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  position: relative;
+}
+.screen-op {
+  width: 1280px;
+  height: 800px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.wordmark {
+  font-family: 'Anton', sans-serif;
+  letter-spacing: 3px;
+  color: var(--magenta);
+}
+
+.balance-chip {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.btn-cta {
+  display: block;
+  width: 100%;
+  text-align: center;
+  background: var(--magenta);
+  color: #170013;
+  font-weight: 700;
+  font-size: 17px;
+  padding: 18px 0;
+  border-radius: 16px;
+  border: none;
+  box-shadow: 0 0 30px rgba(255, 46, 158, 0.35);
+  cursor: pointer;
+}
+
+/* UP / DOWN camp toggle */
+.toggle-btn {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 22px 0;
+  border-radius: 18px;
+  border: 2px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-family: 'Anton', sans-serif;
+  font-size: 24px;
+  letter-spacing: .06em;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.toggle-btn.active {
+  background: var(--magenta);
+  color: #170013;
+  border-color: var(--magenta);
+  animation: campPulse 1.4s ease-in-out infinite;
+}
+.toggle-btn.disabled { opacity: .55; cursor: not-allowed; }
+
+@keyframes campPulse {
+  0%, 100% { box-shadow: 0 0 30px rgba(255, 46, 158, 0.5); }
+  50% { box-shadow: 0 0 60px rgba(255, 46, 158, 0.9); }
+}
+
+/* Jeton chip buttons (mise widget) */
+.chip-btn {
+  width: 54px;
+  height: 54px;
+  padding: 0;
+  border-radius: 50%;
+  box-sizing: border-box;
+  cursor: pointer;
+  background: transparent;
+  border: 3px solid transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: .9;
+  transition: transform .1s ease;
+}
+.chip-btn:hover { opacity: 1; transform: translateY(-2px); }
+
+.undo-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  padding: 4px 6px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-family: 'Space Grotesk', sans-serif;
+  color: var(--magenta-soft);
+  cursor: pointer;
+}
+.undo-btn[disabled] { color: #4A3B4E; cursor: default; }
+
+.stack-chip {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid var(--bg);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25);
+}

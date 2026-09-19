@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aura Max — Mise</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  @keyframes auraGlow {
+    0%, 100% { text-shadow: 0 0 40px rgba(255,46,158,0.55); }
+    50% { text-shadow: 0 0 70px rgba(255,46,158,0.9); }
+  }
+</style>
+</head>
+<body>
+<div class="screen-phone" style="background: radial-gradient(120% 90% at 50% 0%, #2A0E28 0%, #0B0710 62%);">
+  <div style="display: flex; justify-content: space-between; align-items: center; padding: 24px 24px 0;">
+    <span style="font-size: 12px; letter-spacing: 2px; color: var(--text-dim);">ÉCHAUFFEMENT TERMINÉ</span>
+    <span class="balance-chip">1000 $AURA</span>
+  </div>
+  <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 34px; padding: 28px; text-align: center;">
+    <div style="display: flex; flex-direction: column; gap: 6px; align-items: center;">
+      <span class="font-display" style="font-size: 72px; letter-spacing: 4px; color: var(--magenta); line-height: 0.9; animation: auraGlow 2.2s ease-in-out infinite;">AURA</span>
+      <span class="font-display" style="font-size: 32px; letter-spacing: 10px; color: var(--magenta-soft);">MAX</span>
+      <p style="margin: 14px 0 0; max-width: 300px; font-size: 17px; color: var(--text); line-height: 1.5;">Cette fois, c'est vous qui décidez — de la cote <strong>et</strong> du résultat.</p>
+    </div>
+    <div id="mise-root" style="width: 100%;"></div>
+    <span style="font-size: 12px; color: var(--text-faint); text-align: center; margin-top: -18px;">Mise verrouillée dès le lancement du round.</span>
+  </div>
+  <div style="padding: 24px 28px 36px;">
+    <a href="toggle.html" class="btn-cta">Je suis prêt</a>
+  </div>
+</div>
+
+<script type="module">
+  import { createMiseWidget } from '../assets/chip-mise.js';
+
+  createMiseWidget(document.getElementById('mise-root'), {
+    chipSize: 58,
+    maxBalance: 1000,
+    initialStack: [200],
+    onChange: (state) => {
+      // >>> INTEGRATION POINT <<<
+      // This is the real Aura Max round stake (the player picks the camp on
+      // the next screen). Lock it into the pool once "Je suis prêt" is
+      // pressed — this is the transaction/pool-entry submission point.
+      try { sessionStorage.setItem('auraMax.round.stake', JSON.stringify(state)); } catch (e) {}
+    },
+  });
+</script>
+</body>
+</html>

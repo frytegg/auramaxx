@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Aura Max — Freeze &amp; résultat</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  @keyframes blinkWin { 0%, 100% { opacity: 1; box-shadow: 0 0 22px rgba(53,226,140,0.55); } 50% { opacity: 0.5; box-shadow: 0 0 6px rgba(53,226,140,0.15); } }
+  @keyframes blinkLose { 0%, 100% { opacity: 1; box-shadow: 0 0 22px rgba(255,77,106,0.55); } 50% { opacity: 0.5; box-shadow: 0 0 6px rgba(255,77,106,0.15); } }
+  .chip-win { background: rgba(53,226,140,0.12); border: 2px solid var(--green); animation: blinkWin 1.1s ease-in-out infinite; }
+  .chip-lose { background: rgba(255,77,106,0.1); border: 2px solid var(--red); animation: blinkLose 1.1s ease-in-out infinite; }
+</style>
+</head>
+<body>
+<div class="screen-wide">
+  <div style="text-align: center; padding: 44px 64px 0; display: flex; flex-direction: column; gap: 8px;">
+    <span style="font-size: 16px; letter-spacing: 4px; color: var(--text-dim); text-transform: uppercase;">Résultat final</span>
+    <span class="font-display" data-role="headline" style="font-size: 64px; letter-spacing: 1px; color: var(--text);">DOWN GAGNE — PAIE <span style="color: var(--magenta);">×2,6</span></span>
+  </div>
+  <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 32px 90px;">
+    <div id="player-grid" style="display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; max-width: 1420px;"></div>
+  </div>
+</div>
+
+<script>
+  // Demo roster — replace with the live player list + win/loss + streak
+  // count the backend resolves once a round freezes.
+  //
+  // >>> INTEGRATION POINT <<<
+  // Swap this hardcoded array for the real settlement payload. For a full
+  // room this grid should probably paginate/scroll rather than grow
+  // unbounded — the design assumed ~16-30 visible players at once.
+  const players = [
+    { name: 'Léa', won: true, streak: 3 },
+    { name: 'Hugo', won: false, streak: 0 },
+    { name: 'Chloé', won: false, streak: 0 },
+    { name: 'Nathan', won: true, streak: 0 },
+    { name: 'Manon', won: false, streak: 0 },
+    { name: 'Adam', won: false, streak: 0 },
+    { name: 'Camille', won: true, streak: 2 },
+    { name: 'Tom', won: false, streak: 0 },
+    { name: 'Zoé', won: false, streak: 0 },
+    { name: 'Enzo', won: true, streak: 0 },
+    { name: 'Inès', won: false, streak: 0 },
+    { name: 'Lucas', won: false, streak: 0 },
+    { name: 'Anna', won: true, streak: 4 },
+    { name: 'Jules', won: false, streak: 0 },
+    { name: 'Sarah', won: false, streak: 0 },
+    { name: 'Louis', won: false, streak: 0 },
+  ];
+
+  document.getElementById('player-grid').innerHTML = players.map((p) => `
+    <div class="${p.won ? 'chip-win' : 'chip-lose'}" style="border-radius: 14px; padding: 16px 22px; display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 600;">
+      <span>${p.name}</span>
+      ${p.streak > 0 ? `<span style="background: rgba(255,46,158,0.18); color: var(--magenta-soft); border-radius: 999px; padding: 3px 10px; font-size: 13px; font-weight: 700;">${p.streak} d'affilée</span>` : ''}
+    </div>`).join('');
+</script>
+</body>
+</html>

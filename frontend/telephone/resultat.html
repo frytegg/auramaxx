@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aura Max — Résultat</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="screen-phone" style="background: radial-gradient(120% 70% at 50% 30%, #2A0E28 0%, #0B0710 65%);">
+  <div style="padding: 28px 28px 0;">
+    <span class="wordmark" style="font-size: 18px;">AURA</span>
+  </div>
+  <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 22px; padding: 28px; text-align: center;">
+    <span style="display: inline-flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 8px 16px; font-size: 13px; color: var(--text-dim);">
+      <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--green); display: inline-block;"></span>
+      DOWN a gagné
+    </span>
+    <div style="display: flex; flex-direction: column; gap: 4px;">
+      <span class="font-display" style="font-size: 108px; line-height: 0.95; color: var(--magenta); text-shadow: 0 0 60px rgba(255,46,158,0.6);">+520</span>
+      <span style="font-size: 15px; letter-spacing: 2px; color: var(--text-dim); text-transform: uppercase;">$AURA gagnés</span>
+    </div>
+    <div style="display: flex; gap: 12px;">
+      <span style="background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px 18px; font-size: 14px; color: var(--text-dim);">Mise&nbsp;: <strong style="color: var(--text);">200</strong></span>
+      <span style="background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px 18px; font-size: 14px; color: var(--text-dim);">Cote&nbsp;: <strong style="color: var(--text);">×2,6</strong></span>
+    </div>
+    <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 2px;">
+      <span style="font-size: 13px; color: var(--text-dim);">Nouveau solde</span>
+      <span class="font-display" style="font-size: 26px; color: var(--text);">1520 $AURA</span>
+    </div>
+  </div>
+  <div style="padding: 0 28px 40px; text-align: center;">
+    <span style="font-size: 13px; color: var(--text-faint);">Round terminé — merci d'avoir joué&nbsp;!</span>
+  </div>
+</div>
+
+<!--
+  >>> INTEGRATION POINT <<<
+  Every number on this screen (winning camp, payout, multiplier, new
+  balance) is static demo data. Once the freeze/settlement step resolves
+  server-side, populate this screen from that result payload — including
+  handling the losing-camp case (a payout of 0 / "-200" styling) which the
+  original design deliberately didn't spec beyond the win state.
+-->
+</body>
+</html>
